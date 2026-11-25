@@ -1,0 +1,205 @@
+<div class="orb" id="orb" aria-hidden="true"></div>
+<div class="app offline" id="app">
+  <header>
+    <div class="who"><i class="dot" id="dot"></i><div><b id="devTitle">Crafty</b><span id="devName">Not connected</span></div></div>
+    <div class="tools">
+      <span class="chip num" id="battChip" hidden><span class="batt"><i id="battFill"></i></span><b id="battPct">--</b></span>
+      <button class="iconbtn" id="gearBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="ring" id="ring" role="slider" tabindex="0" aria-label="Target temperature" aria-valuemin="40" aria-valuemax="210">
+      <svg viewBox="0 0 300 300" aria-hidden="true">
+        <defs>
+          <linearGradient id="gHeat" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ffb547"/><stop offset="1" stop-color="#ff5a36"/></linearGradient>
+          <linearGradient id="gReady" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7cf0b0"/><stop offset="1" stop-color="#2fd07a"/></linearGradient>
+          <linearGradient id="gIdle" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#5a6470"/><stop offset="1" stop-color="#8b96a3"/></linearGradient>
+        </defs>
+        <g id="scale"></g>
+        <path class="track" id="track"/>
+        <path class="halo" id="halo"/>
+        <path class="fill" id="fill"/>
+        <path class="climb-bg" id="climbBg" opacity="0"/>
+        <path class="climb-arc" id="climbArc" opacity="0"/>
+        <path class="draw-arc" id="drawArc" opacity="0"/>
+        <text class="ends" id="endLo" text-anchor="middle"></text>
+        <text class="ends" id="endHi" text-anchor="middle"></text>
+        <g class="knob" id="knob" opacity="0"><circle class="h" r="15"/><circle class="k" r="10"/></g>
+      </svg>
+      <div class="center">
+        <div class="state" id="state">Offline</div>
+        <div class="now num"><span id="nowNum">--</span><sup id="nowUnit">°F</sup></div>
+        <div class="tgt num">Target <b id="target">--</b></div>
+        <div class="eff" id="eff"></div>
+      </div>
+      <div class="nudge">
+        <button id="minus" aria-label="Lower target" disabled>−</button>
+        <button id="plus" aria-label="Raise target" disabled>+</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip" id="strip">
+    <div class="tile">
+      <div class="k">Bowl <button class="tiny" id="newBowl" disabled aria-label="Start a new bowl">New bowl</button></div>
+      <div class="v num" id="bowlMain">--</div>
+      <div class="bar"><i id="bowlFill"></i></div>
+      <div class="s" id="bowlSub">Estimate · 0 pulls</div>
+    </div>
+    <div class="tile">
+      <div class="k">Battery <span class="badge" id="fcConf" hidden>estimate</span></div>
+      <div class="v num" id="fcMain">--</div>
+      <div class="s" id="fcSub">Connect to estimate</div>
+    </div>
+  </div>
+
+  <div class="quick">
+    <button class="qbtn prof" id="profBtn" aria-label="Profiles and terpenes"><span><b id="profName">Default</b><small id="profSub">Steady</small></span><svg viewBox="0 0 12 12"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+    <div id="presets"></div>
+  </div>
+
+  <div class="mainrow">
+    <button class="main connect" id="mainBtn"><i class="spin" id="mainSpin" hidden></i><span id="mainTxt">Connect to Crafty</span></button>
+    <button class="pullbtn" id="pullBtn" hidden aria-label="Log a pull the page didn't catch">+ Pull</button>
+  </div>
+  <button class="hintbtn" id="gtMain" hidden>Not seeing your pulls? Run the pull test</button>
+  <button class="hintbtn" id="lbMain" hidden>Not seeing your pulls? Label a few</button>
+  <p class="hint" id="hint">Press the Crafty's button once to wake it, then tap Connect.</p>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<div class="guide" id="guide" role="status" aria-live="assertive" hidden>
+  <div class="gk" id="gStep">Guided test</div>
+  <div class="gt" id="gTitle">Getting ready</div>
+  <div class="gc num" id="gCount"></div>
+  <div class="gs" id="gSub"></div>
+  <div class="btns"><button class="btn" id="gStop">Stop test</button><button class="btn primary" id="gShare" hidden>Share recording</button></div>
+</div>
+
+<div class="lab" id="lab" role="dialog" aria-label="Label your pulls" hidden>
+  <div class="lhead"><div><h2>Label your pulls</h2><small class="num" id="lbCount">None yet</small></div><div class="lhb"><button class="btn" id="lbNew" disabled>New test</button><button class="btn" id="lbClose">Close</button></div></div>
+  <div class="lstat" role="status" aria-live="polite"><span id="lbStat"></span><span class="lmsg" id="lbMsg"></span></div>
+  <div class="lholds">
+    <button class="hold soft" id="lbSoft" aria-label="Soft pull: press and hold while you pull"><b>Soft</b><small id="lbSoftT">Press and hold</small></button>
+    <button class="hold med" id="lbMedium" aria-label="Medium pull: press and hold while you pull"><b>Medium</b><small id="lbMediumT">Press and hold</small></button>
+    <button class="hold hard" id="lbHard" aria-label="Hard pull: press and hold while you pull"><b>Hard</b><small id="lbHardT">Press and hold</small></button>
+    <div class="lwait" id="lbWait" role="status" aria-live="polite" hidden>
+      <div class="lringw"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="lr0" cx="32" cy="32" r="28"/><circle class="lr1" id="lbRing" cx="32" cy="32" r="28"/></svg><b class="num" id="lbWaitN">0 s</b></div>
+      <strong>Wait, letting the Crafty settle</strong>
+      <small id="lbWaitWhy"></small>
+      <button class="btn" id="lbGo" hidden>Go anyway</button>
+    </div>
+  </div>
+  <div class="llist num" id="lbList"><div class="ltemp" id="lbTemp"><span>Test temperature</span><div class="stepper"><button id="lbTMinus" aria-label="Lower test temperature">−</button><output class="num" id="lbTVal">--</output><button id="lbTPlus" aria-label="Higher test temperature">+</button></div></div></div>
+  <div class="lfoot"><button class="btn" id="lbUndo" disabled>Undo last</button><button class="btn" id="lbAct" hidden>Connect</button><button class="btn primary" id="lbShare" disabled>Share file</button></div>
+</div>
+
+<div class="lask" id="lbAsk" role="alertdialog" aria-modal="true" aria-labelledby="lbAskT" aria-describedby="lbAskWhy" hidden>
+  <div class="laskc"><strong id="lbAskT">Share these pulls first?</strong><small id="lbAskWhy"></small>
+    <div class="btns"><button class="btn" id="lbAskNo">Cancel</button><button class="btn" id="lbAskDrop">Discard</button><button class="btn primary" id="lbAskShare">Share</button></div></div>
+</div>
+
+<div id="sheetWrap">
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-label="Settings">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2>Settings <small class="ver" id="verTag"></small></h2><button class="btn" id="setDone">Done</button></div></div>
+    <div class="scroll">
+      <div class="warn" id="storeNote" hidden></div>
+
+      <div class="glabel" role="heading" aria-level="2">Your Crafty</div>
+      <div class="group">
+        <div class="row"><div><b id="fwTitle">Not connected</b><small id="fwInfo">Connect to see details</small></div><button class="btn" id="discBtn" disabled>Disconnect</button></div>
+        <div class="row"><div><b>Boost amount</b><small>Added on top when you start boost with the Crafty's button</small></div>
+          <div class="stepper"><button id="bMinus" aria-label="Less boost" disabled>−</button><output class="num" id="boostVal">--</output><button id="bPlus" aria-label="More boost" disabled>+</button></div></div>
+        <div class="row stack"><div class="bar2" style="display:flex;justify-content:space-between"><b>LED brightness</b><span class="val num" id="ledVal">--</span></div>
+          <input type="range" id="led" min="0" max="100" step="5" aria-label="LED brightness" disabled></div>
+        <div class="row"><div><b>Find my Crafty</b><small>Buzzes and blinks for about 30 seconds</small></div><button class="btn" id="findBtn" disabled>Find</button></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Display</div>
+      <div class="group">
+        <div class="row"><b>Temperature in</b><div class="seg" style="width:140px"><button id="unitF">°F</button><button id="unitC">°C</button></div></div>
+        <div class="row" style="padding-bottom:0;min-height:44px"><div><b>Screen lighting</b><small>The glow behind the dial. The Crafty's own light only takes a brightness.</small></div></div>
+        <div class="chips" id="lights"></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Pull detection</div>
+      <div class="group">
+        <div class="row" id="gtRow"><div><b>Guided pull test</b><small id="gtWhy">Connect to your Crafty first.</small></div><button class="btn primary" id="gtBtn" aria-disabled="true">Start</button></div>
+        <div class="row" id="lbRow"><div><b>Label your pulls</b><small id="lbWhy">Connect to your Crafty first.</small></div><div style="display:flex;gap:8px;flex:none"><button class="btn" id="lbCont" hidden>Continue</button><button class="btn primary" id="lbBtn" aria-disabled="true">Start</button></div></div>
+        <div class="row stack">
+          <canvas class="trace" id="trace" width="600" height="192" aria-label="Chamber temperature over the last 90 seconds"></canvas>
+          <div class="legend"><span><i style="background:var(--heat-2)"></i>Chamber</span><span><i style="background:var(--muted)"></i>Steady level</span><span><i style="background:var(--accent)"></i>Counted pull</span></div>
+          <small id="pdStatus">Turn the heater on to see this.</small>
+        </div>
+        <div class="row"><div><b>Sensitivity</b><small>Raise it if pulls are missed, lower it if it counts pulls you didn't take</small></div></div>
+        <div class="chips" id="sens" style="padding-top:0"></div>
+        <div class="row"><div><b>Record raw data</b><small>Saves every reading from the Crafty, so pull detection can be tuned to your device</small></div><button class="switch" id="recBtn" role="switch" aria-checked="false" aria-label="Record raw data"></button></div>
+        <div class="row" id="recRow" hidden><div><b id="recTitle">Recording</b><small id="recInfo">0 readings</small></div><div style="display:flex;gap:8px"><button class="btn" id="recClear">Clear</button><button class="btn primary" id="recShare">Share</button></div></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Stats</div>
+      <div class="group">
+        <div class="row"><div><b>History</b><small>Your sessions and the Crafty's lifetime heater time</small></div><button class="btn" id="histBtn">Open</button></div>
+        <div class="row"><div><b>Best pull</b><small id="bestSub">No pulls yet</small></div><button class="btn" id="bestReset">Clear</button></div>
+        <div class="row"><div><b>Battery health</b><small id="healthSub">Learning</small></div><span class="val num" id="healthVal">--</span></div>
+        <div class="row"><div><b>Reset learning</b><small>Forget what the battery, bowl and pull estimates have learned</small></div><button class="btn danger" id="resetFc">Reset</button></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Help</div>
+      <p class="note"><b>Trouble connecting?</b> Use Chrome on Android with Bluetooth on (and Location, on Android 11 or older). Press the Crafty's button once to wake it, and close the S&amp;B web app or any other phone connected to it.</p>
+      <p class="note">Drag the ring or tap − and + to set the temperature. The page keeps to the Crafty's own 40–210 °C range. Boost and superboost can only be started with the button on the Crafty. Bowl and battery figures are estimates that learn from how you use it.</p>
+      <p class="note" id="verNote"></p>
+    </div>
+  </div>
+</div>
+
+<div id="histWrap">
+  <div class="scrim" id="histScrim"></div>
+  <div class="sheet" id="histSheet" role="dialog" aria-label="History">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2>History</h2><button class="btn" id="histClose">Done</button></div></div>
+    <div class="scroll">
+      <div class="life" id="life"></div>
+      <div class="glabel" role="heading" aria-level="2">Sessions</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="histList"></div>
+      <div class="row" style="border:0;padding:8px 4px"><span class="note" style="padding:0">Kept on this phone only. Pull sizes and battery use are estimates.</span><button class="btn danger" id="histClear">Clear</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="profWrap">
+  <div class="scrim" id="profScrim"></div>
+  <div class="sheet" id="profSheet" role="dialog" aria-label="Profiles">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2 id="profTitle">Profiles</h2><button class="btn" id="profDone">Done</button></div></div>
+    <div class="scroll">
+      <div id="profListView">
+        <div class="glabel" role="heading" aria-level="2">Profiles</div>
+        <div class="group" id="profList"></div>
+        <button class="btn wide" id="profNew" style="margin-top:8px">New profile</button>
+        <p class="note" style="margin-top:8px">A climb profile starts low and steps up on its own as the bowl gets used, so you get flavor first and the rest later.</p>
+        <div class="glabel" role="heading" aria-level="2">Aim for a terpene</div>
+        <div class="group"><div class="chips two" id="terps"></div></div>
+        <p class="note" id="terpNote">Sets the temperature near where that terpene boils. Flower always gives off a mix, so this leans the flavor, it doesn't isolate one.</p>
+      </div>
+      <div id="profEditView" hidden>
+        <div class="group">
+          <div class="form">
+            <label class="wide">Name<input id="pfName" maxlength="24" autocomplete="off" enterkeyhint="done"></label>
+            <div class="seg wide"><button id="pfSteady" type="button">Steady</button><button id="pfClimb" type="button">Climb</button></div>
+            <label class="wide">Start from a terpene<select id="pfTerp"></select></label>
+            <label>Start temp <span class="pfU"></span><input id="pfBase" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Top temp <span class="pfU"></span><input id="pfMax" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Step up by <span class="pfU"></span><input id="pfStep" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Every (% of bowl)<input id="pfEvery" type="number" inputmode="numeric" step="5"></label>
+            <div class="hintline climbOnly" id="pfHint"></div>
+            <label class="wide">Screen lighting<select id="pfLight"></select></label>
+            <div class="btns"><button class="btn danger" id="pfDel" type="button">Delete</button><button class="btn" id="pfCancel" type="button">Cancel</button><button class="btn primary" id="pfSave" type="button">Save</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
