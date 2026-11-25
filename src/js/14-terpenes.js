@@ -15,7 +15,7 @@ let TP = null; // the terpene picked for this session, cleared when you set the 
 const startOf = pr => { const t = terpOf(pr.terp); return t ? clamp(t.c, LIM.MIN, LIM.MAX) : pr.base; };
 function pickTerp(id) {
   const t = terpOf(id);
-  TP = t ? t.id : null; CL.mark = CL.min;
+  TP = t ? t.id : null;
   if (t && F.sess) F.sess.terp = t.name;
   if (t && S.connected) setTarget(clamp(t.c, LIM.MIN, LIM.MAX), 0);
   renderTerps(); render();
@@ -30,6 +30,6 @@ function renderTerps() {
     return b;
   }));
 }
-// You set the temperature yourself: the terpene pick no longer applies, and a climb carries on from your temp
-const handSet = () => { if (TP) { TP = null; renderTerps(); } CL.mark = CL.min; };
+// You set the temperature yourself: the terpene pick no longer applies, and Follow the bowl pauses
+const handSet = () => { if (TP) { TP = null; renderTerps(); } followPause(); };
 

@@ -1,7 +1,7 @@
 // ---- Sheets ----
 // One sheet at a time. Close with Done, a tap outside, a swipe down, Escape, or the phone's Back button
 // (opening a sheet adds a history step, so Back closes the sheet instead of leaving the page and dropping the Crafty).
-const SHEETS = { settings: ["sheetWrap", "sheet"], hist: ["histWrap", "histSheet"], prof: ["profWrap", "profSheet"] };
+const SHEETS = { settings: ["sheetWrap", "sheet"], hist: ["histWrap", "histSheet"], prof: ["profWrap", "profSheet"], str: ["strWrap", "strSheet"] };
 let openSh = null, histPushed = false;
 function hideSheet(name) { const [w, s] = SHEETS[name]; $(w).classList.remove("open"); $(s).inert = true; $(s).style.transform = ""; if (openSh === name) openSh = null; }
 function showSheet(name) {

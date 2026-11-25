@@ -104,6 +104,7 @@ function draw() {
 
   drawSettings();
   renderForecast();
+  renderBowl();
   renderClimb();
   drawRec();
 }

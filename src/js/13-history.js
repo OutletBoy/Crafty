@@ -9,7 +9,7 @@ let H = cleanHist(rawHist);
 const saveHist = () => store.set(KEY.hist, H, () => { if (H.length < 20) return false; H.length = Math.floor(H.length / 2); return true; });
 // Sessions saved by older pages carry pull counts; save the history once without them
 if (Array.isArray(rawHist) && rawHist.some(x => x && ("hits" in x || "pulls" in x || "best" in x)) && store.ok && !store.readOnly) saveHist();
-const newSess = t => ({ start: t, batt: S.battery, tMin: S.target ?? 0, tMax: S.target ?? 0, profile: activeProfile().name, terp: terpOf(TP)?.name || "" });
+const newSess = t => ({ start: t, batt: S.battery, tMin: S.target ?? 0, tMax: S.target ?? 0, profile: activeProfile().name, terp: terpOf(TP)?.name || "", strain: sbName() });
 function logSession(t, note, x = F.sess) {
   if (x === F.sess) F.sess = null;
   if (!x) return;
@@ -17,7 +17,7 @@ function logSession(t, note, x = F.sess) {
   if (mins < 1) return;
   H.unshift({ start: x.start, mins: +mins.toFixed(1), tMin: +x.tMin.toFixed(1), tMax: +x.tMax.toFixed(1),
               used: x.batt != null && S.battery != null ? Math.max(0, x.batt - S.battery) : null,
-              profile: x.profile + (x.terp ? " · " + x.terp : ""), note });
+              profile: [x.profile, x.terp, x.strain].filter(Boolean).join(" · "), note });
   H.sort((a, b) => b.start - a.start); // a session recovered from a reload can be older than one already logged
   if (H.length > 300) H.length = 300;
   saveHist();

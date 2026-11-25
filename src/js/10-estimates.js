@@ -20,7 +20,7 @@ let M = cleanModel(store.json(KEY.model));
 const fcSave = () => {
   clearTimeout(saveT); saveT = null;
   store.set(KEY.model, M);
-  store.set(KEY.bowl, { min: CL.min, mark: CL.mark, ts: nowMs(), sess: F.sess ? { ...F.sess } : null });
+  store.set(KEY.bowl, { ts: nowMs(), sess: F.sess ? { ...F.sess } : null, meter: bmSaved() });
 };
 // Saving is batched: many changes in a row cost one write a couple of seconds later (and one when you leave the page)
 let saveT = null;
@@ -31,14 +31,10 @@ const sessionCost = T => M.corr * (heatUpCost(T, AMB) + M.sessMin * holdRate(T))
 
 // Live tracking
 const F = { last: 0, pred: 0, valid: false, prevBatt: null, heaterOn: false, sessStart: 0, atTemp: false, sess: null };
-// The climb clock: minutes at temperature since this heat-up (min), when the climb last stepped or started (mark),
-// and when the heater last went off (endedAt), so a quick reheat carries the climb on.
-const CL = { min: 0, mark: 0, endedAt: 0 };
+// (r13 and r14 also saved a timed-climb clock here, min and mark; r15 doesn't use it.)
 let savedSess = null;
 {
   const b = store.json(KEY.bowl);
-  // What an older page saved here (pull-based, no minutes in it) starts the climb clock fresh
-  if (b && isFinite(b.ts) && isFinite(b.min) && nowMs() - b.ts < 15 * 60000) { CL.min = num(b.min, 0, 0, 600); CL.mark = num(b.mark, 0, 0, CL.min); CL.endedAt = b.ts; }
   if (b && b.sess && isFinite(b.sess.start) && isFinite(b.ts)) savedSess = { ...b.sess, savedAt: b.ts };
 }
 let fcTimer = null;

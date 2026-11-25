@@ -40,6 +40,14 @@
   </section>
 
   <div class="strip" id="strip">
+    <div class="tile" id="bowlTile">
+      <div class="k"><span>Bowl <span class="badge" id="bmConf">learning</span></span><button class="tiny" id="bmNew" disabled aria-label="Start a new bowl">New bowl</button></div>
+      <div class="bmTop"><div class="v num" id="bmMain">Fresh</div><div class="bmBtns"><button class="btn" id="bmStill" hidden>Still vapor</button><button class="btn primary" id="bmSpent" disabled>No more vapor</button></div></div>
+      <div class="bands" id="bmBands" aria-hidden="true"></div>
+      <div class="bandsLbl num" aria-hidden="true"><span id="bmLo">360°</span><span id="bmHi">410°</span></div>
+      <div class="s" id="bmSub" aria-live="polite">Connect to track the bowl</div>
+      <button class="strLine" id="strBtn" aria-label="Strain in the bowl"><img class="thumb" id="strThumb" alt="" hidden><span id="strName">Pick a strain</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+    </div>
     <div class="tile">
       <div class="k">Battery <span class="badge" id="fcConf" hidden>estimate</span></div>
       <div class="v num" id="fcMain">--</div>
@@ -94,12 +102,14 @@
       <div class="group">
         <div class="row"><div><b>History</b><small>Your sessions and the Crafty's lifetime heater time</small></div><button class="btn" id="histBtn">Open</button></div>
         <div class="row"><div><b>Battery health</b><small id="healthSub">Learning</small></div><span class="val num" id="healthVal">--</span></div>
-        <div class="row"><div><b>Reset learning</b><small>Forget what the battery estimate and your usual session length have learned</small></div><button class="btn danger" id="resetFc">Reset</button></div>
+        <div class="row"><div><b>Reset learning</b><small>Forget what the battery estimate, your usual session length and the bowl meter (yours and each strain's) have learned</small></div><button class="btn danger" id="resetFc">Reset</button></div>
       </div>
 
       <div class="glabel" role="heading" aria-level="2">Help</div>
       <p class="note"><b>Trouble connecting?</b> Use Chrome on Android with Bluetooth on (and Location, on Android 11 or older). Press the Crafty's button once to wake it, and close the S&amp;B web app or any other phone connected to it.</p>
       <p class="note">Drag the ring or tap − and + to set the temperature. The page keeps to the Crafty's own 40–210 °C range. Boost and superboost can only be started with the button on the Crafty. Battery figures are estimates that learn from how you use it.</p>
+      <p class="note"><b>Strains.</b> Tap the strain line on the Bowl tile to pick what's in the bowl. Each strain keeps its own batches, each with a THC %, a date and a photo, and learns its own pace from your taps, starting from your overall pace. Adding a strain by name looks it up on StrainAPI (only the name is sent) to fill in effects, terpenes and flavors, which you can edit. Strains and photos stay on this phone.</p>
+      <p class="note"><b>Bowl meter.</b> Each segment is a temperature level, 360° to 410°. Time at temperature fills the level you're at and every level below it, faster when it's hotter, so a bowl that's spent at 365° still gives vapor at 390°. The Crafty doesn't report your draws, so this is an estimate: tap <b>No more vapor</b> when a level runs out (or <b>Still vapor</b> when it hasn't) and the meter corrects this bowl and learns your pace.</p>
       <p class="note" id="verNote"></p>
     </div>
   </div>
@@ -127,7 +137,7 @@
         <div class="glabel" role="heading" aria-level="2">Profiles</div>
         <div class="group" id="profList"></div>
         <button class="btn wide" id="profNew" style="margin-top:8px">New profile</button>
-        <p class="note" style="margin-top:8px">A climb profile starts low and steps up on its own every few minutes at temperature, so you get flavor first and the rest later.</p>
+        <p class="note" style="margin-top:8px">A Follow the bowl profile starts low and steps up one level (5°F) each time the bowl meter says the level you're at is spent, so you get flavor first and the rest later. Tap <b>Not yet</b> on a step to go back down. Setting the temperature yourself pauses it.</p>
         <div class="glabel" role="heading" aria-level="2">Aim for a terpene</div>
         <div class="group"><div class="chips two" id="terps"></div></div>
         <p class="note" id="terpNote">Sets the temperature near where that terpene boils. Flower always gives off a mix, so this leans the flavor, it doesn't isolate one.</p>
@@ -136,12 +146,10 @@
         <div class="group">
           <div class="form">
             <label class="wide">Name<input id="pfName" maxlength="24" autocomplete="off" enterkeyhint="done"></label>
-            <div class="seg wide"><button id="pfSteady" type="button">Steady</button><button id="pfClimb" type="button">Climb</button></div>
+            <div class="seg wide"><button id="pfSteady" type="button">Steady</button><button id="pfClimb" type="button">Follow the bowl</button></div>
             <label class="wide">Start from a terpene<select id="pfTerp"></select></label>
             <label>Start temp <span class="pfU"></span><input id="pfBase" type="number" inputmode="numeric"></label>
             <label class="climbOnly">Top temp <span class="pfU"></span><input id="pfMax" type="number" inputmode="numeric"></label>
-            <label class="climbOnly">Step up by <span class="pfU"></span><input id="pfStep" type="number" inputmode="numeric"></label>
-            <label class="climbOnly">Every (minutes at temp)<input id="pfMins" type="number" inputmode="numeric" step="1" min="1" max="15"></label>
             <div class="hintline climbOnly" id="pfHint"></div>
             <label class="wide">Screen lighting<select id="pfLight"></select></label>
             <div class="btns"><button class="btn danger" id="pfDel" type="button">Delete</button><button class="btn" id="pfCancel" type="button">Cancel</button><button class="btn primary" id="pfSave" type="button">Save</button></div>
@@ -152,3 +160,62 @@
   </div>
 </div>
 
+<div id="strWrap">
+  <div class="scrim" id="strScrim"></div>
+  <div class="sheet" id="strSheet" role="dialog" aria-label="Strains">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2 id="strTitle">Strains</h2><button class="btn" id="strDone">Done</button></div></div>
+    <div class="scroll">
+      <div id="strListView">
+        <div class="glabel" role="heading" aria-level="2">In the bowl</div>
+        <div class="group" id="strList"></div>
+        <div class="group">
+          <div class="form">
+            <label class="wide">Add a strain<input id="strNewName" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Strain name"></label>
+            <button class="btn primary wide" id="strAdd" type="button">Add strain</button>
+          </div>
+        </div>
+        <p class="note" style="margin-top:8px">Adding one looks its name up on StrainAPI to fill in effects, terpenes and flavors. Only the name is sent. Strains, batches and photos stay on this phone.</p>
+        <div class="glabel" role="heading" aria-level="2">Add several at once</div>
+        <div class="group">
+          <div class="form">
+            <label class="wide">One per line: name, THC %, date<textarea id="strPaste" rows="3" autocomplete="off" spellcheck="false" placeholder="Sour Kush|22.5|2026-11-25"></textarea></label>
+            <button class="btn wide" id="strPasteAdd" type="button">Add these</button>
+          </div>
+        </div>
+      </div>
+      <div id="strView" hidden>
+        <div class="group">
+          <div class="form">
+            <label class="wide">Name<input id="stName" maxlength="40" autocomplete="off" enterkeyhint="done"></label>
+            <button class="btn wide" id="stLook" type="button">Look up on StrainAPI</button>
+            <div class="hintline" id="stLookNote" aria-live="polite"></div>
+            <label class="wide">Effects<input id="stEff" autocomplete="off" placeholder="Relaxed, happy"></label>
+            <label class="wide">Terpenes<input id="stTerps" autocomplete="off" placeholder="Myrcene, limonene"></label>
+            <div class="hintline" id="stTerpHint"></div>
+            <label class="wide">Flavors<input id="stFlav" autocomplete="off" placeholder="Citrus, earthy"></label>
+            <p class="note wide" id="stSrc" hidden></p>
+            <div class="btns"><button class="btn danger" id="stDel" type="button">Delete</button><button class="btn" id="stBack" type="button">Back</button><button class="btn primary" id="stSave" type="button">Save</button></div>
+          </div>
+        </div>
+        <div class="glabel" role="heading" aria-level="2">Batches</div>
+        <div class="group" id="stBatches"></div>
+        <button class="btn wide" id="stAddBatch" style="margin-top:8px">Add batch</button>
+        <p class="note" style="margin-top:8px">A new bag of the same strain is a new batch. It starts from the strain's learned pace and learns its own from there.</p>
+      </div>
+      <div id="batView" hidden>
+        <div class="group">
+          <div class="form">
+            <label class="wide">Batch name<input id="btLabel" maxlength="24" autocomplete="off" enterkeyhint="done"></label>
+            <label>THC %<input id="btThc" type="text" inputmode="decimal" autocomplete="off" placeholder="23.45"></label>
+            <label>Date<input id="btDate" type="date"></label>
+            <div class="photo wide"><img id="btImg" alt="Photo of this batch" hidden><div class="hintline" id="btPhotoNote" aria-live="polite"></div></div>
+            <div class="btns"><button class="btn" id="btPhotoDel" type="button" hidden>Remove photo</button><button class="btn" id="btPhotoAdd" type="button">Add photo</button></div>
+            <input id="btFile" type="file" accept="image/*" hidden>
+            <div class="btns"><button class="btn danger" id="btDel" type="button">Delete</button><button class="btn" id="btBack" type="button">Back</button><button class="btn primary" id="btSave" type="button">Save</button></div>
+          </div>
+        </div>
+        <p class="note" style="margin-top:8px">The photo is shrunk and kept on this phone only. It's never sent anywhere.</p>
+      </div>
+    </div>
+  </div>
+</div>

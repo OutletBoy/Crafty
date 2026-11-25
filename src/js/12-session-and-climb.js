@@ -1,6 +1,6 @@
-// ---- Session and climb clock ----
-// A session runs from heater on to heater off. The climb clock counts minutes at temperature; heating up again
-// within 3 minutes of turning the heater off carries it on, anything later starts a climb from the bottom.
+// ---- Session ----
+// A session runs from heater on to heater off. Whether a heat-up is the same bowl or a new one is the bowl meter's call
+// (bmHeater); a new bowl starts Follow the bowl from its start temp.
 function fcConnected() {
   const t = nowMs();
   F.last = t; F.pred = 0; F.valid = false; F.prevBatt = S.battery;
@@ -29,28 +29,26 @@ const charging = () => !!(S.power & 1);
 function fcTick() {
   const t = nowMs(), dt = (t - F.last) / 60000; F.last = t;
   if (dt <= 0) return;
-  if (dt > 10 / 60) { F.valid = false; F.pred = 0; return; } // the page was asleep: this stretch can't be measured
+  if (dt > 10 / 60) { bmGap(dt); saveSoon(); F.valid = false; F.pred = 0; return; } // the page was asleep: the battery can't use this stretch
   if (!F.heaterOn || S.target == null) return;
+  bmTick(dt); followTick(dt); saveSoon();
   const goal = effTarget(), T = S.current;
   if (F.sess) { F.sess.tMin = Math.min(F.sess.tMin, S.target); F.sess.tMax = Math.max(F.sess.tMax, S.target); }
   if (!F.atTemp && T != null && T >= goal - 3) F.atTemp = true;
   if (!F.atTemp) return; // heat-up is charged as one lump when the heater turns on
   F.pred += holdRate(goal) * dt;
-  CL.min += dt;
-  climbCheck();
-  saveSoon();
 }
 function fcHeater(on) {
   if (!S.connected || on === F.heaterOn) return; // while connecting, fcConnected sets the starting state
   const t = nowMs();
   F.heaterOn = on; F.atTemp = false;
+  const fresh = bmHeater(on, t);
   if (on) {
     F.sessStart = t;
     F.sess = newSess(t);
     F.pred += heatUpCost(effTarget(), S.current == null ? AMB : S.current);
     F.last = t;
-    if (!(CL.endedAt && t - CL.endedAt < 3 * 60000)) freshClimb();
-    CL.endedAt = 0;
+    if (fresh) freshClimb();
   } else {
     const mins = (t - F.sessStart) / 60000;
     if (F.sessStart && mins >= 1.5) {
@@ -58,12 +56,11 @@ function fcHeater(on) {
       M.sessions++;
     }
     logSession(t, "");
-    CL.endedAt = t;
     fcSave();
   }
 }
 function freshClimb() {
-  CL.min = 0; CL.mark = 0; CL.endedAt = 0;
+  followReset();
   const pr = activeProfile();
-  if (pr.mode === "climb" && S.connected) setTarget(TP ? terpOf(TP).c : startOf(pr), 0); // a fresh climb starts from the bottom
+  if (pr.mode === "climb" && S.connected) setTarget(TP ? terpOf(TP).c : startOf(pr), 0); // a new bowl starts from the bottom
 }
