@@ -108,7 +108,8 @@
       <div class="glabel" role="heading" aria-level="2">Help</div>
       <p class="note"><b>Trouble connecting?</b> Use Chrome on Android with Bluetooth on (and Location, on Android 11 or older). Press the Crafty's button once to wake it, and close the S&amp;B web app or any other phone connected to it.</p>
       <p class="note">Drag the ring or tap − and + to set the temperature. The page keeps to the Crafty's own 40–210 °C range. Boost and superboost can only be started with the button on the Crafty. Battery figures are estimates that learn from how you use it.</p>
-      <p class="note"><b>Strains.</b> Tap the strain line on the Bowl tile to pick what's in the bowl. Each strain keeps its own batches, each with a THC %, a date and a photo, and learns its own pace from your taps, starting from your overall pace. Adding a strain by name looks it up on StrainAPI (only the name is sent) to fill in effects, terpenes and flavors, which you can edit. Strains and photos stay on this phone.</p>
+      <p class="note"><b>Strains.</b> Tap the strain line on the Bowl tile to pick what's in the bowl. Each strain keeps its own batches, each with a THC %, a date and a photo, and learns its own pace from your taps, starting from your overall pace. Adding a strain by name fills in its effects, terpenes and flavors from the page's built-in strain list, which you can edit. Strains and photos stay on this phone, and nothing is sent anywhere.</p>
+      <p class="note"><b>Strain list credits.</b> The built-in strain list is made from the <a href="https://github.com/Shannon-Goddard/ci-strains-pro" target="_blank" rel="noopener noreferrer">Cannabis Intelligence Database</a> by Shannon Goddard (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>) and the <a href="https://github.com/kushyapp/cannabis-dataset" target="_blank" rel="noopener noreferrer">Kushy Cannabis Dataset</a> (MIT, © Kushy), cut down to a fixed set of words and merged across listings. Side effects are left out. It can be wrong.</p>
       <p class="note"><b>Bowl meter.</b> Each segment is a temperature level, 360° to 410°. Time at temperature fills the level you're at and every level below it, faster when it's hotter, so a bowl that's spent at 365° still gives vapor at 390°. The Crafty doesn't report your draws, so this is an estimate: tap <b>No more vapor</b> when a level runs out (or <b>Still vapor</b> when it hasn't) and the meter corrects this bowl and learns your pace.</p>
       <p class="note" id="verNote"></p>
     </div>
@@ -174,7 +175,7 @@
             <button class="btn primary wide" id="strAdd" type="button">Add strain</button>
           </div>
         </div>
-        <p class="note" style="margin-top:8px">Adding one looks its name up on StrainAPI to fill in effects, terpenes and flavors. Only the name is sent. Strains, batches and photos stay on this phone.</p>
+        <p class="note" style="margin-top:8px">Adding one fills in its effects, terpenes and flavors from the page's built-in strain list, if it's there. Nothing is sent. Strains, batches and photos stay on this phone.</p>
         <div class="glabel" role="heading" aria-level="2">Add several at once</div>
         <div class="group">
           <div class="form">
@@ -187,7 +188,7 @@
         <div class="group">
           <div class="form">
             <label class="wide">Name<input id="stName" maxlength="40" autocomplete="off" enterkeyhint="done"></label>
-            <button class="btn wide" id="stLook" type="button">Look up on StrainAPI</button>
+            <button class="btn wide" id="stLook" type="button">Fill in from strain list</button>
             <div class="hintline" id="stLookNote" aria-live="polite"></div>
             <label class="wide">Effects<input id="stEff" autocomplete="off" placeholder="Relaxed, happy"></label>
             <label class="wide">Terpenes<input id="stTerps" autocomplete="off" placeholder="Myrcene, limonene"></label>

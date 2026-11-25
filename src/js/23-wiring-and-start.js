@@ -71,7 +71,7 @@ window.addEventListener("storage", e => {
 });
 document.addEventListener("touchmove", e => { if (!e.target.closest || !e.target.closest("input, .scroll")) e.preventDefault(); }, { passive: false });
 $("verTag").textContent = "v" + VERSION.split(" ").pop();
-$("verNote").textContent = `Page version ${VERSION}. Everything is kept on this phone. The one thing ever sent is a strain's name, to StrainAPI, when you add a strain by name or tap Look up.`;
+$("verNote").textContent = `Page version ${VERSION}. Everything is kept on this phone, and nothing is sent anywhere.`;
 if (store.damaged.length) toast("Some saved data was damaged and has been reset. A copy was kept on this phone.", 6000, null, "err");
 renderLights(); renderTerps();
 booted = true;

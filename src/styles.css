@@ -244,3 +244,6 @@ input[type=range]{width:100%;height:var(--hit);accent-color:var(--accent);margin
   .sheet{max-height:94dvh}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* r17: credit links in notes stay readable on the dark background */
+.note a { color: inherit; text-decoration: underline; }

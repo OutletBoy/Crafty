@@ -28,9 +28,21 @@ Only Node is needed. There are no packages to install.
   - `17-ring-controls.js`: drag the ring, and hold − or + to repeat.
   - `18-sheets-and-settings.js`: how sheets open and close (with the phone's Back button), and the Settings sheet.
   - `19-recorder-controls.js`: recording on and off (Settings > Diagnostics), the diagnostics poll, and sharing the recording as a CSV.
+  - `19a-strain-data.js`: the built-in strain list (r17). Made by `tools/make-strain-data.js`; don't edit it by hand.
+  - `20-strains.js`: strains and batches, filling a strain in from the built-in list, and adding a list from a link or pasted text.
+  - `21-photos.js`: bud photos, kept in IndexedDB on the phone.
   - `23-wiring-and-start.js`: button wiring, then start-up. It must stay last.
 
-To add a part, give it a number between its neighbours, like `12a-something.js` or a renumbered set. Numbers 11 and 20 to 22 are free since r13. A new file in `js/` is picked up without touching `page.html`.
+To add a part, give it a number between its neighbours, like `12a-something.js` or a renumbered set. Number 22 is free. A new file in `js/` is picked up without touching `page.html`.
+
+## The built-in strain list
+
+`js/19a-strain-data.js` holds about 4,000 strains with their effects, flavors and terpenes, so a strain fills in with nothing sent anywhere. It's made from two open datasets, which aren't kept here (14 MB):
+
+- Cannabis Intelligence Database by Shannon Goddard, https://github.com/Shannon-Goddard/ci-strains-pro (`raw-data.csv`), licensed under CC BY 4.0.
+- Kushy Cannabis Dataset, https://github.com/kushyapp/cannabis-dataset (`Dataset/Strains/strains-kushy_api.2017-11-14.csv`), MIT License, (c) Kushy.
+
+To remake it, download both CSVs and run `node src/tools/make-strain-data.js <raw-data.csv> <kushy csv>`. The tool cuts free text down to fixed word lists, merges listings of the same strain, and leaves out side effects. Both credits must stay in the page (Settings > Help) and in the site README. Never add personal strains to the list: the repository is public.
 
 ## Build
 

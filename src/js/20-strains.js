@@ -43,7 +43,7 @@ function cleanStrains(j) {
       const c = cleanBatch(b, bs.length); if (ids.has(c.id)) c.id = newId("b"); ids.add(c.id); bs.push(c);
     }
     let id = typeof x.id === "string" && x.id ? x.id.slice(0, 40) : newId("s"); if (ids.has(id)) id = newId("s"); ids.add(id);
-    out.list.push({ id, name, effects: listOf(x.effects), terps: listOf(x.terps), flavors: listOf(x.flavors), src: x.src === "StrainAPI" ? "StrainAPI" : "",
+    out.list.push({ id, name, effects: listOf(x.effects), terps: listOf(x.terps), flavors: listOf(x.flavors), src: x.src === "StrainAPI" || x.src === "list" ? x.src : "",
                     k: num(x.k, BML0.k, 0.05, 3), taps: Math.round(num(x.taps, 0, 0, 1e5)), batches: bs });
   }
   const a = j.active && typeof j.active === "object" ? j.active : {}, s = out.list.find(x => x.id === a.s);
@@ -74,54 +74,50 @@ function useStrain(sid, bid) {
   render();
 }
 
-// ---- Look up a strain on the web ----
-// Only the strain's name is sent, to StrainAPI (strainapi.com, a free strain database), and only when you add a strain
-// by typing its name or tap Look up. No account, nothing else from the phone. What comes back fills in empty boxes only,
-// so it never overwrites anything you typed, and you can edit it all.
-const LOOKUP = "https://www.strainapi.com/wp-json/strainapi/v1/search?q=";
-let lookSeq = 0;
-// Finds the entry whose name matches (same key) in whatever list shape the reply has
-function pickHit(j, key) {
-  const items = Array.isArray(j) ? j : j && typeof j === "object"
-    ? (["data", "results", "strains", "items"].map(k => j[k]).find(Array.isArray) || (j.name ? [j] : Object.values(j).filter(x => x && typeof x === "object")))
-    : [];
-  for (const it of items.slice(0, 200)) {
-    if (!it || typeof it !== "object") continue;
-    let name = it.name ?? it.title ?? it.strain; if (name && typeof name === "object") name = name.rendered;
-    if (typeof name !== "string" || strKey(name) !== key) continue;
-    const hit = { effects: listOf(it.effects ?? it.effect ?? it.feelings), terps: listOf(it.terpenes ?? it.terps ?? it.terpene), flavors: listOf(it.flavors ?? it.flavor ?? it.taste) };
-    return hit.effects.length || hit.terps.length || hit.flavors.length ? hit : { empty: true };
+// ---- Fill in a strain from the built-in strain list (r17) ----
+// Effects, terpenes and flavors come from the strain list built into this page (19a-strain-data.js, made by
+// src/tools/make-strain-data.js), so nothing is sent anywhere and it works offline. It fills in empty boxes only,
+// so it never overwrites anything you typed, and you can edit it all. (r15-r16 asked StrainAPI on the web instead;
+// strains filled in that way keep saying so.)
+// Names match ignoring case, spaces and punctuation, "&" or "and", and words like Auto or Feminized at the end,
+// so "OG Kush", "O.G. Kush" and "og kush auto" are the same strain. Keep dataKey the same as in the tool.
+const SD_LETTERS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", SD_VAR = new Set(SD_VARIANT);
+const SD_SOURCE = "the page's built-in strain list (Cannabis Intelligence Database by Shannon Goddard, CC BY 4.0, and the Kushy dataset, MIT)";
+function dataKey(name) {
+  const w = String(name || "").toLowerCase().normalize("NFKD").replace(/&/g, " and ").split(/[^a-z0-9]+/).filter(Boolean);
+  while (w.length > 1 && SD_VAR.has(w[w.length - 1])) w.pop();
+  return w.join("");
+}
+let sdIndex = null;
+// The list's entry for a name, unpacked, or null
+function sdFind(name) {
+  if (!sdIndex) {
+    sdIndex = new Map();
+    for (const line of SD_DATA.split("\n")) { const k = dataKey(line.slice(0, line.indexOf("|"))); if (k && !sdIndex.has(k)) sdIndex.set(k, line); }
   }
-  return null;
+  const line = sdIndex.get(dataKey(name));
+  if (!line) return null;
+  const [n, e, f, t] = line.split("|"), words = (list, s) => [...(s || "")].map(c => list[SD_LETTERS.indexOf(c)]).filter(Boolean);
+  return { name: n, effects: words(SD_WORDS.effects, e), flavors: words(SD_WORDS.flavors, f), terps: words(SD_WORDS.terps, t) };
 }
 const STFIELDS = [["effects", "stEff"], ["terps", "stTerps"], ["flavors", "stFlav"]];
 function lookNote(id, msg) { if (stEdit === id && stView === "strain") $("stLookNote").textContent = msg; }
-async function lookUp(id) {
+function lookUp(id) {
   const s = strainOf(id); if (!s) return;
-  if (typeof fetch !== "function") { lookNote(id, "This browser can't look strains up. Fill these in yourself."); return; }
-  const seq = ++lookSeq, key = strKey(s.name);
-  lookNote(id, `Looking up ${s.name}…`);
-  let hit = null, err = false;
-  const ctl = typeof AbortController === "function" ? new AbortController() : null, tm = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
-  try {
-    const r = await fetch(LOOKUP + encodeURIComponent(s.name), { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store", signal: ctl ? ctl.signal : undefined });
-    if (!r.ok) throw new Error("status " + r.status);
-    hit = pickHit(await r.json(), key);
-  } catch (e) { err = true; }
-  clearTimeout(tm);
-  const now = strainOf(id);
-  if (seq !== lookSeq || !now) return; // a newer look-up started, or the strain was deleted meanwhile
-  if (err) { lookNote(id, "Couldn't reach StrainAPI. Fill these in yourself, or tap Look up again later."); return; }
-  if (!hit || hit.empty) { lookNote(id, hit ? `StrainAPI has ${now.name} but no details for it. Fill these in yourself.` : `StrainAPI doesn't know ${now.name}. Fill these in yourself.`); return; }
-  let filled = 0;
   const open = stEdit === id && stView === "strain";
+  const name = (open && cleanText($("stName").value, STR.name)) || s.name; // the name in the box, even before Save
+  const hit = sdFind(name);
+  if (!hit) { lookNote(id, `${name} isn't in the built-in strain list. Fill these in yourself.`); return; }
+  let filled = 0;
   for (const [f, el] of STFIELDS) {
     if (!hit[f].length) continue;
-    if (!now[f].length) { now[f] = hit[f]; filled++; }
+    if (!s[f].length) { s[f] = hit[f].slice(); filled++; }
     if (open && !$(el).value.trim()) { $(el).value = hit[f].join(", "); }
   }
-  if (filled) { now.src = "StrainAPI"; saveStrains(); }
-  lookNote(id, filled ? "Filled in from StrainAPI. It can be wrong, so edit anything that's off and tap Save." : "Found it on StrainAPI, but you've filled these in already. Clear a box to take StrainAPI's.");
+  if (filled) { s.src = "list"; saveStrains(); }
+  const as = strKey(hit.name) === strKey(name) ? "" : ` (listed as ${hit.name})`;
+  lookNote(id, filled ? `Filled in from the built-in strain list${as}. It can be wrong, so edit anything that's off and tap Save.`
+                      : `Found it in the built-in strain list${as}, but you've filled these in already. Clear a box to take the list's.`);
   renderStrain();
 }
 
@@ -230,7 +226,7 @@ function addStrain() {
   const s = newStrain(name); ST.list.push(s); saveStrains();
   $("strNewName").value = "";
   openStrain(s.id);
-  lookUp(s.id); // you typed the name to add it, so it's looked up straight away (name only)
+  lookUp(s.id); // filled in straight away from the built-in list (nothing is sent)
 }
 function openStrain(id) {
   const s = strainOf(id);
@@ -249,7 +245,8 @@ function terpHint(list) {
 function renderStrain() {
   const s = strainOf(stEdit);
   if (!s) return;
-  $("stSrc").textContent = s.src ? "Effects, terpenes and flavors came from StrainAPI (strainapi.com) and may be wrong. Edit anything that's off." : "";
+  $("stSrc").textContent = s.src === "list" ? `Effects, terpenes and flavors came from ${SD_SOURCE} and may be wrong. Edit anything that's off.`
+    : s.src ? "Effects, terpenes and flavors came from StrainAPI (strainapi.com) and may be wrong. Edit anything that's off." : "";
   $("stSrc").hidden = !s.src;
   $("stTerpHint").textContent = terpHint(listOf($("stTerps").value));
   const act = ST.active;
