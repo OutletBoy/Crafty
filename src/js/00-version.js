@@ -1,2 +1,2 @@
 "use strict";
-const VERSION = "2026-11-25 r17"; // bump on every build; tests/layout.test.js fails if the page changes without it
+const VERSION = "2026-11-25 r18"; // bump on every build; tests/layout.test.js fails if the page changes without it

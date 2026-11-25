@@ -58,9 +58,13 @@ function activeSB() { const s = strainOf(ST.active.s); return { s, b: (s && s.ba
 const latestBatch = s => (s && s.batches[s.batches.length - 1]) || null;
 const thcText = b => b && b.thc != null ? `${b.thc}% THC` : "";
 const sbName = () => { const { s, b } = activeSB(); return s ? s.name + (b ? " · " + b.label : "") : ""; };
+// The lists a strain can carry, and the one batch whose THC % the strain view shows: the one in use if this strain is
+// in use, otherwise the newest (r18)
+const SLISTS = ["effects", "flavors", "terps"];
+const thcBatch = s => (s && ST.active.s === s.id && s.batches.find(b => b.id === ST.active.b)) || latestBatch(s);
 const newBatch = (s, it = {}) => cleanBatch({ label: `Batch ${s.batches.length + 1}`, thc: it.thc, date: it.date || todayStr() }, s.batches.length);
 function newStrain(name, it = {}) {
-  const s = { id: newId("s"), name: cleanText(name, STR.name), effects: [], terps: [], flavors: [], src: "", k: BML0.k, taps: 0, batches: [] };
+  const s = { id: newId("s"), name: cleanText(name, STR.name), effects: listOf(it.effects), terps: listOf(it.terps), flavors: listOf(it.flavors), src: "", k: BML0.k, taps: 0, batches: [] };
   s.batches.push(newBatch(s, it));
   return s;
 }
@@ -122,44 +126,56 @@ function lookUp(id) {
 }
 
 // ---- Adding a list of strains: a private link or pasted text ----
-// Format: Name|THC|date, separated by ";" or new lines, for example "Sour Kush|22.5|2026-11-25;Blue Dream|21".
+// Format: Name|THC|date|effects|flavors|terpenes, separated by ";" or new lines, for example
+// "Sour Kush|22.5|2026-11-25;Blue Dream|21||Relaxed, happy|Berry, sweet|Myrcene". Everything after the name is optional,
+// and the three lists (r18) are comma-separated. Like the built-in list, they only fill boxes that are empty.
 // A link puts it after "#strains=". The part after # never leaves the phone (browsers don't send it to the website),
 // so the list isn't in the page or on GitHub. The page asks before adding, then removes it from the address bar.
 function parseStrainList(text) {
   let t = String(text || "").trim();
   try { t = decodeURIComponent(t.replace(/%(?![0-9a-f]{2})/gi, "%25")); } catch (e) {} // a bare "%" (as in 22.5%) is kept as text
   t = t.replace(/^#/, "").replace(/^strains=/i, "");
-  const out = [], seen = new Set();
+  const out = [], seen = new Map();
   for (const part of t.split(/[;\n]/)) {
-    const [n, thc, date] = part.split("|");
+    const [n, thc, date, eff, fla, ter] = part.split("|");
     const name = cleanText(n, STR.name), key = strKey(name), it = { name, thc: thcOf(thc), date: okDate(date) };
+    const lists = { effects: listOf(eff || ""), flavors: listOf(fla || ""), terps: listOf(ter || "") };
+    for (const f of SLISTS) if (lists[f].length) it[f] = lists[f];
     const same = key + "|" + it.thc + "|" + it.date; // the same name again is another batch of it; an exact repeat is skipped
-    if (!key || seen.has(same)) continue;
-    seen.add(same);
-    out.push(it);
+    if (!key) continue;
+    if (seen.has(same)) { const was = seen.get(same); for (const f of SLISTS) if (it[f] && !was[f]) was[f] = it[f]; continue; } // but its lists still count
     if (out.length >= STR.list) break;
+    seen.set(same, it);
+    out.push(it);
   }
   return out;
 }
 // A name you already have becomes a new batch of it, unless a batch with that THC % (and date, if given) is already there
+// Effects, flavors and terpenes from a list fill in a strain you have only where its box is empty, and its THC % fills
+// the newest batch if that has none (r18)
 function addStrainList(items) {
-  let added = 0, batches = 0;
+  let added = 0, batches = 0; const filled = new Set();
   for (const it of items) {
     const s = findStrain(it.name);
     if (s) {
+      for (const f of SLISTS) if (it[f] && it[f].length && !s[f].length) { s[f] = it[f].slice(); filled.add(s.id); }
+      // A THC % for a strain whose newest batch has none yet goes on that batch, not a second one, whatever its date (r18)
+      const lb = latestBatch(s);
+      if (it.thc != null && lb && lb.thc == null) { lb.thc = it.thc; if (it.date && !lb.date) lb.date = it.date; filled.add(s.id); continue; }
       if (s.batches.length >= STR.maxBatches || s.batches.some(b => b.thc === it.thc && (!it.date || !b.date || b.date === it.date))) continue;
       s.batches.push(newBatch(s, it)); batches++;
     } else if (ST.list.length < STR.maxStrains) { ST.list.push(newStrain(it.name, it)); added++; }
   }
-  return { added, batches };
+  return { added, batches, filled: filled.size };
 }
 function importStrains(items) {
   const snap = JSON.stringify(ST), r = addStrainList(items);
   clearHash();
-  if (!r.added && !r.batches) { toast("You have all of those already.", 3000); return; }
+  if (!r.added && !r.batches && !r.filled) { toast("You have all of those already.", 3000); return; }
   saveStrains(); renderStrList(); render();
   const msg = [r.added && `${r.added} strain${r.added === 1 ? "" : "s"}`, r.batches && `${r.batches} batch${r.batches === 1 ? "" : "es"}`].filter(Boolean).join(" and ");
-  toast(`Added ${msg}.`, 7000, { label: "Undo", fn: () => { ST = cleanStrains(JSON.parse(snap)); saveStrains(); renderStrList(); render(); } });
+  const fill = r.filled ? `Filled in details for ${r.filled} strain${r.filled === 1 ? "" : "s"} you had.` : "";
+  toast([msg && `Added ${msg}.`, fill].filter(Boolean).join(" "), 7000, { label: "Undo", fn: () => { ST = cleanStrains(JSON.parse(snap)); saveStrains(); renderStrList(); render(); } });
 }
 function clearHash() { try { if (/^#strains=/i.test(location.hash || "")) history.replaceState(history.state, "", location.pathname + location.search); } catch (e) {} }
 function offerImport() {
@@ -174,7 +190,7 @@ function offerImport() {
 window.addEventListener("hashchange", offerImport);
 function pasteStrains() {
   const items = parseStrainList($("strPaste").value);
-  if (!items.length) { toast("Nothing to add. Write Name|THC|date, one strain per line.", 4000); return; }
+  if (!items.length) { toast("Nothing to add. Write one strain per line: Name|THC|date|effects|flavors|terpenes. Only the name is needed.", 5000); return; }
   $("strPaste").value = "";
   importStrains(items);
 }
@@ -217,14 +233,27 @@ function renderStrList() {
       return pickRow(s.id === act, s.name, sub, thumbEl(strainPhoto(s)), () => { useStrain(s.id); renderStrList(); toast(`Using ${sbName()}.`, 2500); }, () => openStrain(s.id));
     }));
 }
+// The THC % box beside the name (r18) is optional and sets the first batch's THC
 function addStrain() {
   const name = cleanText($("strNewName").value, STR.name);
   if (!strKey(name)) { toast("Type the strain's name first.", 2500); return; }
+  const raw = $("strNewThc").value.trim(), thc = raw ? thcOf(raw) : null;
+  if (raw && thc == null) { toast("THC is a percent from 0 to 100, like 22.5.", 3500); return; }
   const have = findStrain(name);
-  if (have) { $("strNewName").value = ""; openStrain(have.id); toast(`You already have ${have.name}. Add a new batch to it here.`, 5000); return; }
+  if (have) {
+    $("strNewName").value = ""; $("strNewThc").value = "";
+    // A THC % for a strain you have: it goes on the newest batch if that has none yet, else it's a new bag (a new batch)
+    const lb = latestBatch(have);
+    if (thc != null && lb && lb.thc == null) { lb.thc = thc; saveStrains(); openStrain(have.id); render(); toast(`You already have ${have.name}. Set ${lb.label} to ${thc}% THC.`, 5000); return; }
+    if (thc != null && !have.batches.some(b => b.thc === thc) && have.batches.length < STR.maxBatches) {
+      const b = newBatch(have, { thc }); have.batches.push(b); saveStrains(); openStrain(have.id); render();
+      toast(`You already have ${have.name}. Added ${b.label} at ${thc}% THC.`, 5000); return;
+    }
+    openStrain(have.id); toast(`You already have ${have.name}. Add a new batch to it here.`, 5000); return;
+  }
   if (ST.list.length >= STR.maxStrains) { toast(`That's the limit of ${STR.maxStrains} strains. Delete one first.`, 4000); return; }
-  const s = newStrain(name); ST.list.push(s); saveStrains();
-  $("strNewName").value = "";
+  const s = newStrain(name, { thc }); ST.list.push(s); saveStrains();
+  $("strNewName").value = ""; $("strNewThc").value = "";
   openStrain(s.id);
   lookUp(s.id); // filled in straight away from the built-in list (nothing is sent)
 }
@@ -234,6 +263,9 @@ function openStrain(id) {
   stEdit = id;
   $("stName").value = s.name;
   for (const [f, el] of STFIELDS) $(el).value = s[f].join(", ");
+  const tb = thcBatch(s);
+  $("stThc").value = tb && tb.thc != null ? String(tb.thc) : "";
+  $("stThcLabel").textContent = tb ? `THC % (${tb.label})` : "THC %";
   $("stLookNote").textContent = "";
   renderStrain(); showStrView("strain");
 }
@@ -260,8 +292,13 @@ function saveStrain() {
   if (!strKey(name)) { toast("A strain needs a name.", 2500); return; }
   const other = findStrain(name);
   if (other && other.id !== s.id) { toast(`You already have ${other.name}. Use a different name, or add a batch to that one.`, 5000); return; }
+  const raw = $("stThc").value.trim(), thc = raw ? thcOf(raw) : null;
+  if (raw && thc == null) { toast("THC is a percent from 0 to 100, like 22.5.", 3500); return; }
   s.name = name;
   for (const [f, el] of STFIELDS) s[f] = listOf($(el).value);
+  // The THC % box edits the batch it names; a strain with no batches left gets one if you type a THC %
+  const tb = thcBatch(s);
+  if (tb) tb.thc = thc; else if (thc != null) s.batches.push(newBatch(s, { thc }));
   saveStrains(); renderStrList(); showStrView("list"); render();
 }
 function deleteStrain() {
@@ -291,7 +328,7 @@ const editBatch = () => { const s = strainOf(stEdit); return { s, b: s && s.batc
 function saveBatch() {
   const { s, b } = editBatch(); if (!b) { openStrain(stEdit); return; }
   const raw = $("btThc").value.trim(), thc = raw ? thcOf(raw) : null;
-  if (raw && thc == null) { toast("THC is a percent from 0 to 100, like 23.45.", 3500); return; }
+  if (raw && thc == null) { toast("THC is a percent from 0 to 100, like 22.5.", 3500); return; }
   b.label = cleanText($("btLabel").value, STR.label) || b.label; b.thc = thc; b.date = okDate($("btDate").value);
   saveStrains(); openStrain(s.id); render();
 }

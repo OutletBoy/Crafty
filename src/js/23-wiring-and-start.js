@@ -17,6 +17,7 @@ $("strBtn").addEventListener("click", openStrains);
 $("strDone").addEventListener("click", closeSheets);
 $("strAdd").addEventListener("click", addStrain);
 $("strNewName").addEventListener("keydown", e => { if (e.key === "Enter") addStrain(); });
+$("strNewThc").addEventListener("keydown", e => { if (e.key === "Enter") addStrain(); });
 $("strPasteAdd").addEventListener("click", pasteStrains);
 $("stLook").addEventListener("click", () => lookUp(stEdit));
 $("stSave").addEventListener("click", saveStrain);

@@ -171,15 +171,17 @@
         <div class="group" id="strList"></div>
         <div class="group">
           <div class="form">
-            <label class="wide">Add a strain<input id="strNewName" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Strain name"></label>
-            <button class="btn primary wide" id="strAdd" type="button">Add strain</button>
+            <label class="wide">Add a strain<input id="strNewName" maxlength="40" autocomplete="off" enterkeyhint="next" placeholder="Strain name"></label>
+            <label>THC % (optional)<input id="strNewThc" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="22.5"></label>
+            <button class="btn primary endbtn" id="strAdd" type="button">Add strain</button>
           </div>
         </div>
         <p class="note" style="margin-top:8px">Adding one fills in its effects, terpenes and flavors from the page's built-in strain list, if it's there. Nothing is sent. Strains, batches and photos stay on this phone.</p>
         <div class="glabel" role="heading" aria-level="2">Add several at once</div>
         <div class="group">
           <div class="form">
-            <label class="wide">One per line: name, THC %, date<textarea id="strPaste" rows="3" autocomplete="off" spellcheck="false" placeholder="Sour Kush|22.5|2026-11-25"></textarea></label>
+            <label class="wide">One per line: name|THC %|date|effects|flavors|terpenes<textarea id="strPaste" rows="3" autocomplete="off" spellcheck="false" placeholder="Blue Dream|21|2026-11-25|Relaxed, happy|Berry, sweet|Myrcene, pinene"></textarea></label>
+            <p class="note">Only the name is needed. Leave a part empty to skip it, like Blue Dream|21||Relaxed. Effects, flavors and terpenes are comma-separated and only fill boxes that are empty.</p>
             <button class="btn wide" id="strPasteAdd" type="button">Add these</button>
           </div>
         </div>
@@ -188,6 +190,7 @@
         <div class="group">
           <div class="form">
             <label class="wide">Name<input id="stName" maxlength="40" autocomplete="off" enterkeyhint="done"></label>
+            <label class="wide"><span id="stThcLabel">THC %</span><input id="stThc" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="22.5"></label>
             <button class="btn wide" id="stLook" type="button">Fill in from strain list</button>
             <div class="hintline" id="stLookNote" aria-live="polite"></div>
             <label class="wide">Effects<input id="stEff" autocomplete="off" placeholder="Relaxed, happy"></label>
@@ -207,7 +210,7 @@
         <div class="group">
           <div class="form">
             <label class="wide">Batch name<input id="btLabel" maxlength="24" autocomplete="off" enterkeyhint="done"></label>
-            <label>THC %<input id="btThc" type="text" inputmode="decimal" autocomplete="off" placeholder="23.45"></label>
+            <label>THC %<input id="btThc" type="text" inputmode="decimal" autocomplete="off" placeholder="22.5"></label>
             <label>Date<input id="btDate" type="date"></label>
             <div class="photo wide"><img id="btImg" alt="Photo of this batch" hidden><div class="hintline" id="btPhotoNote" aria-live="polite"></div></div>
             <div class="btns"><button class="btn" id="btPhotoDel" type="button" hidden>Remove photo</button><button class="btn" id="btPhotoAdd" type="button">Add photo</button></div>
