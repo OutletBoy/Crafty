@@ -142,8 +142,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
 @keyframes spin{to{transform:rotate(360deg)}}
 .hint{flex:none;margin:-4px 8px 0;text-align:center;font-size:12px;color:var(--muted)}
 .btn[aria-disabled=true]{opacity:.4}
-/* Before the first connection the estimates have nothing to show, so they step aside */
-.app.offline .strip{display:none}
+/* Offline the battery estimate has nothing to show, so it steps aside. The Bowl tile stays: strains are picked and added before connecting. */
+.app.offline .strip .tile:not(#bowlTile){display:none}
 
 /* Toasts sit above the sheets so an Undo is always reachable. Tap one to dismiss it. */
 .toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:448px;margin:0 auto;display:flex;align-items:center;gap:10px;font-size:14px;line-height:1.45;color:var(--fg);background:#1f262f;border:1px solid var(--line-2);border-radius:14px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:12;animation:pop .18s ease-out}
