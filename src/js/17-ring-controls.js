@@ -22,7 +22,6 @@ ring.addEventListener("pointerdown", ev => {
   if (!S.connected || S.target == null || ev.target.closest("button")) return;
   const { f, dist } = fracAt(ev);
   if (dist < R - 48 || dist > R + 40) return; // only the ring band, not the numbers in the middle
-  if (tempLocked()) return lockedNote();
   ev.preventDefault();
   dragId = ev.pointerId; try { ring.setPointerCapture(dragId); } catch (e) {}
   S.dragging = true; ring.classList.add("drag");

@@ -27,7 +27,6 @@ const read = k => S.chars[k] ? gatt(() => S.chars[k].readValue(), { key: "r:" + 
 const write = (k, buf) => {
   if (!S.chars[k]) return Promise.reject(new Error("your Crafty doesn't offer this over Bluetooth"));
   rec("write", k, hex(new DataView(buf)), u16(new DataView(buf)));
-  DEV.wroteAt = nowMs(); // a write resets the Crafty's own use timer, so it isn't a pull
   return gatt(() => (S.chars[k].writeValueWithResponse || S.chars[k].writeValue).call(S.chars[k], buf), { prio: true });
 };
 

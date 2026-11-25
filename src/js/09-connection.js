@@ -80,7 +80,6 @@ async function connect(opts = {}) {
     startPolling();
     keepAwake();
     if (REC.on) recProbe();
-    if (LB.open) rec("label", "connected", S.fw || "", "", "labeling carries on");
     S.connecting = false; render();
     return true;
   } catch (e) {
@@ -97,15 +96,14 @@ async function connect(opts = {}) {
 }
 function giveBackControl() { if (releaseControl) releaseControl(); }
 // Readings outside what a Crafty can report (a glitch, a half-received value) are ignored rather than shown,
-// so one bad packet can't fake a pull, a battery drop or a target change.
+// so one bad packet can't fake a battery drop or a target change.
 const SANE = { current: [0, 260], target: [LIM.MIN - 1, LIM.MAX + 1], boost: [0, LIM.BOOST_MAX], battery: [0, 100], led: [0, 100] };
 const sane = (k, v) => !SANE[k] || (isFinite(v) && v >= SANE[k][0] && v <= SANE[k][1]);
 function apply(k, dv, src = "read") {
   if (!dv || !dv.byteLength) return;
-  const t = nowMs();
-  S.seen[k] = t;
+  S.seen[k] = nowMs();
   let v;
-  if (k === "current") { v = readCurrent(dv); if (sane(k, v)) { S.current = v; if (S.connected) pdSample(v, t); } }
+  if (k === "current") { v = readCurrent(dv); if (sane(k, v)) S.current = v; }
   else if (k === "target") { v = readTarget(dv); if (sane(k, v) && !S.dragging && !tTimer) S.target = v; }
   else if (k === "boost") { v = u16(dv) / 10 / (S.devF ? 1.8 : 1); if (sane(k, v)) S.boost = v; }
   else if (k === "battery") { v = u16(dv); if (sane(k, v)) { fcBattery(v); S.battery = v; } }
@@ -115,7 +113,7 @@ function apply(k, dv, src = "read") {
   else if (k === "power") S.power = v = u16(dv);
   else if (k === "useHours") S.lifeH = v = u16(dv);
   else if (k === "useMins") S.lifeM = v = u16(dv);
-  rec(src, k, hex(dv), v == null ? "" : +(+v).toFixed(2), k === "current" && PD.settled ? `base ${PD.base.toFixed(2)} thr ${pdThr().toFixed(2)}${PD.inHit ? " pull" : ""}` : "");
+  rec(src, k, hex(dv), v == null ? "" : +(+v).toFixed(2));
 }
 async function refresh(all) {
   // Target first, so the °F/°C setting is known before the current temperature is read
@@ -132,13 +130,10 @@ function startPolling() {
   poll = setInterval(async () => { if (!S.connected || S.dragging) return; await refresh(false); render(); }, 5000);
 }
 // A dropout you didn't ask for (out of range, phone slept, Crafty glitched) starts a quiet reconnect loop. The current
-// session, bowl and climb are held, and carry on if the Crafty comes back within CFG.resumeWindow.
+// session and climb are held, and carry on if the Crafty comes back within CFG.resumeWindow.
 function onDisconnect() {
   if (!S.connected) return; // already handled, or a failed connect attempt
   S.connected = false; clearInterval(poll); clearInterval(fcTimer); flushOps();
-  lbCancelHold("disconnect");
-  if (LB.open) rec("label", "connection lost");
-  if (PD.inHit) pdEnd(nowMs(), false);
   S.lostAt = nowMs(); fcSave();
   if (S.userDisc) { endSession(S.lostAt, ""); giveBackControl(); releaseWake(); }
   else startReconnect();
@@ -176,10 +171,10 @@ function releaseWake() { try { wake && wake.release(); } catch (e) {} wake = nul
 // Coming back to the page: keep the screen awake again, and if the phone dropped the Crafty while asleep, get it back.
 // Going away: save now rather than waiting for the next scheduled save.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") { lbCancelHold("hidden"); fcSave(); lbSave(); return; }
+  if (document.visibilityState !== "visible") { fcSave(); return; }
   if (S.connected) keepAwake();
   else if (S.device && S.everConnected && !S.userDisc && !S.connecting && !S.reconnecting && releaseControl) startReconnect();
   render();
 });
-window.addEventListener("pagehide", () => { fcSave(); lbSave(); });
+window.addEventListener("pagehide", () => fcSave());
 

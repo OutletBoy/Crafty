@@ -3,8 +3,9 @@
 // so cleared, blocked, full or damaged storage can never stop the page from working.
 // SCHEMA goes up whenever a saved shape changes; a page older than the saved data won't overwrite it.
 // 2: pulls measured relative to your usual pull; climb profiles step by % of the bowl.
-const SCHEMA = 2;
-const KEY = { unit: "crafty-unit", model: "crafty-model-v2", bowl: "crafty-bowl", prof: "crafty-profiles", light: "crafty-light", hist: "crafty-history", pd: "crafty-pd", schema: "crafty-schema" };
+// 3 (r13): pull counting and the bowl estimate removed. Climb profiles step every few minutes at temperature.
+const SCHEMA = 3;
+const KEY = { unit: "crafty-unit", model: "crafty-model-v2", bowl: "crafty-bowl" /* the live session and climb clock; the name is older than the change */, prof: "crafty-profiles", light: "crafty-light", hist: "crafty-history", schema: "crafty-schema" };
 const store = {
   ok: true, readOnly: false, damaged: [], full: false,
   raw(k) { try { return localStorage.getItem(k); } catch (e) { store.ok = false; return null; } },
@@ -31,6 +32,13 @@ const store = {
   const v = parseInt(store.raw(KEY.schema), 10);
   if (v > SCHEMA) store.readOnly = true; // saved by a newer version of this page: read it, don't overwrite it
   else if (v !== SCHEMA && store.ok) { try { localStorage.setItem(KEY.schema, String(SCHEMA)); } catch (e) { store.ok = false; } }
+})();
+// Pull counting was removed in r13: soft and medium pulls don't show in anything the Crafty reports over Bluetooth.
+// What older pages saved for it (detector settings, labeled sessions) is removed quietly, so nothing stale lingers.
+const GONE = ["crafty-pd", "crafty-label", "crafty-label-rows", "crafty-label-done", "crafty-label-temp"];
+(function dropPullData() {
+  if (!store.ok || store.readOnly) return;
+  for (const k of GONE) for (const x of [k, k + "-damaged"]) { try { localStorage.removeItem(x); } catch (e) {} }
 })();
 const num = (v, d, lo = -Infinity, hi = Infinity) => typeof v === "number" && isFinite(v) ? clamp(v, lo, hi) : d;
 

@@ -1,13 +1,7 @@
 // ---- Writes (debounced so dragging doesn't flood Bluetooth) ----
 let tTimer = null;
-// The guided pull test needs one steady temperature, so nothing changes it until the test is over
-const gtLocked = () => GT.on && GT.phase !== "done";
-// Pull labeling holds one test temperature for the whole session too (lbApplyTemp is the only thing that sets it)
-const tempLocked = () => gtLocked() || (LB.open && LB.temp != null && !LB.applying);
-const lockedNote = () => { toast(gtLocked() ? "The temperature stays put during the pull test. Stop the test to change it." : "The temperature stays at the test temperature while labeling. Close labeling to change it.", 3000); buzz(20); render(); };
 function setTarget(c, delay = 350) {
   if (!S.connected) return;
-  if (tempLocked()) return lockedNote();
   S.target = snapC(c);
   render();
   clearTimeout(tTimer);
@@ -23,7 +17,6 @@ function setTarget(c, delay = 350) {
 let bTimer = null;
 function setBoost(c) {
   if (!S.connected || S.boost == null) return;
-  if (tempLocked()) return lockedNote();
   S.boost = clamp(Math.round(c * 10) / 10, 0, LIM.BOOST_MAX);
   render();
   clearTimeout(bTimer);

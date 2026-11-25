@@ -4,12 +4,11 @@ const pt = (deg, r = R) => { const a = deg * Math.PI / 180; return [CX + r * Mat
 const frac = c => clamp((c - LIM.MIN) / (LIM.MAX - LIM.MIN), 0, 1);
 const arcD = r => { const [x0, y0] = pt(ARC0, r), [x1, y1] = pt(ARC0 + SWEEP, r); return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 1 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
 const arcLen = r => 2 * Math.PI * r * SWEEP / 360;
-const ARCLEN = arcLen(R), CLIMBLEN = arcLen(R - 34), DRAWLEN = arcLen(R - 29);
+const ARCLEN = arcLen(R), CLIMBLEN = arcLen(R - 34);
 (function drawRing() {
   for (const id of ["track", "fill", "halo"]) $(id).setAttribute("d", arcD(R));
   for (const id of ["climbBg", "climbArc"]) $(id).setAttribute("d", arcD(R - 34));
-  $("drawArc").setAttribute("d", arcD(R - 29));
-  for (const [id, len] of [["fill", ARCLEN], ["halo", ARCLEN], ["climbArc", CLIMBLEN], ["drawArc", DRAWLEN]]) { $(id).style.strokeDasharray = len; $(id).style.strokeDashoffset = len; }
+  for (const [id, len] of [["fill", ARCLEN], ["halo", ARCLEN], ["climbArc", CLIMBLEN]]) { $(id).style.strokeDasharray = len; $(id).style.strokeDashoffset = len; }
   // Scale ticks every 10 °C, longer every 50
   let html = "";
   for (let c = LIM.MIN; c <= LIM.MAX; c += 10) {
@@ -25,14 +24,12 @@ const ARCLEN = arcLen(R), CLIMBLEN = arcLen(R - 34), DRAWLEN = arcLen(R - 29);
 
 const effTarget = () => clamp((S.target || 0) + ((S.project & BIT.BOOST) || (S.project & BIT.SUPER) ? (S.boost || 0) : 0), LIM.MIN, LIM.MAX);
 const heatingNow = () => S.connected && !!(S.project & BIT.HEATER);
-const readyNow = () => heatingNow() && !S.dragging && (!!(S.project & BIT.ATTEMP) || PD.settled ||
+const readyNow = () => heatingNow() && !S.dragging && (!!(S.project & BIT.ATTEMP) ||
   (S.current != null && S.target != null && Math.abs(S.current - effTarget()) <= 2));
-const times = s => (s >= 10 ? s.toFixed(0) : s.toFixed(1)) + "×";
 
 function draw() {
   const on = S.connected, heating = heatingNow(), ready = readyNow();
   const boost = !!(S.project & BIT.BOOST), sup = !!(S.project & BIT.SUPER);
-  const pulling = heating && PD.inHit;
 
   put($("app"), "class", "app" + (!on && !S.reconnecting ? " offline" : ""));
   put($("nowNum"), "text", fmt(S.current));
@@ -42,25 +39,20 @@ function draw() {
   put($("endHi"), "text", fmt(LIM.MAX) + "°");
 
   // The line under the target: what matters most right now
-  const recent = on && !PD.inHit && F.lastPullAt && nowMs() - F.lastPullAt < 4000;
-  let eff = "", effCls = "eff";
-  if (pulling) { eff = M.typArea ? `Pull ${times(liveStrength())} your usual` : "Pulling"; effCls = "eff pull"; }
-  else if (recent) { eff = `That pull: ${times(F.lastPull)} your usual${F.lastWasBest ? " · new best" : ""}`; effCls = "eff pull"; }
-  else if (sup) eff = "Superboost on";
-  else if (boost && S.boost) eff = `Boost on, heading to ${fmt(effTarget())}°`;
-  else eff = climbText() || terpText() || (heating && !ready ? "Heating up" : "");
-  put($("eff"), "text", eff); put($("eff"), "class", effCls);
+  const eff = sup ? "Superboost on" : boost && S.boost ? `Boost on, heading to ${fmt(effTarget())}°`
+    : climbText() || terpText() || (heating && !ready ? "Heating up" : "");
+  put($("eff"), "text", eff);
 
   const st = $("state");
-  put(st, "class", "state" + (pulling ? " pulling" : on && ready ? " ready" : heating ? " heating" : ""));
+  put(st, "class", "state" + (on && ready ? " ready" : heating ? " heating" : ""));
   put(st, "text", S.reconnecting ? "Reconnecting" : S.connecting ? "Connecting" : !on ? (S.device ? "Disconnected" : "Offline")
-    : pulling ? "Pulling" : ready ? "Ready" : heating ? "Heating" : "Heater off");
+    : ready ? "Ready" : heating ? "Heating" : "Heater off");
 
   const grad = !on ? "gIdle" : ready ? "gReady" : heating ? "gHeat" : "gIdle";
   const off = S.current == null ? ARCLEN : ARCLEN * (1 - frac(S.current));
   for (const id of ["fill", "halo"]) { put($(id), "stroke", `url(#${grad})`); put($(id), "strokeDashoffset", String(off)); }
   put($("halo"), "opacity", heating ? "0.18" : "0");
-  applyLighting(on, heating, ready, pulling);
+  applyLighting(on, heating, ready);
 
   const ring = $("ring");
   if (S.target != null && on) {
@@ -70,9 +62,8 @@ function draw() {
     put(ring, "@aria-valuenow", String(Math.round(S.target)));
     put(ring, "@aria-valuetext", fmt(S.target) + " degrees " + (S.unit === "F" ? "Fahrenheit" : "Celsius"));
   } else put($("knob"), "@opacity", "0");
-  const locked = tempLocked();
-  put($("minus"), "disabled", !on || S.target == null || locked);
-  put($("plus"), "disabled", !on || S.target == null || locked);
+  put($("minus"), "disabled", !on || S.target == null);
+  put($("plus"), "disabled", !on || S.target == null);
 
   // Main button
   const mb = $("mainBtn");
@@ -85,7 +76,6 @@ function draw() {
   else if (S.pending) { cls = "main " + (S.pending === "on" ? "on" : "off"); label = S.pending === "on" ? "Starting heater…" : "Turning off…"; spin = true; dis = true; }
   else { cls = "main " + (heating ? "on" : "off"); label = heating ? "Turn heater off" : "Turn heater on"; }
   put(mb, "class", cls); put(mb, "disabled", dis); put($("mainTxt"), "text", label);
-  put($("pullBtn"), "hidden", !heating || GT.on || LB.open);
   put($("mainSpin"), "hidden", !spin);
   const noBt = !navigator.bluetooth ? noBluetoothReason() : "";
   put($("hint"), "text", noBt || "Press the Crafty's button once to wake it, then tap Connect.");
@@ -110,14 +100,12 @@ function draw() {
     }));
     ps.dataset.unit = S.unit;
   }
-  for (const b of ps.children) { put(b, "disabled", !on || locked); put(b, "class", "qbtn num" + (S.target != null && Math.abs(+b.dataset.c - S.target) < 0.6 ? " on" : "")); }
+  for (const b of ps.children) { put(b, "disabled", !on); put(b, "class", "qbtn num" + (S.target != null && Math.abs(+b.dataset.c - S.target) < 0.6 ? " on" : "")); }
 
   drawSettings();
   renderForecast();
   renderClimb();
-  renderDraw();
   drawRec();
-  renderLab();
 }
 
 let toastT = null;

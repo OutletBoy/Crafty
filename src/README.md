@@ -9,32 +9,28 @@ Only Node is needed. There are no packages to install.
 `page.html` is the outline. A line that reads exactly `@include <file>` is replaced by that file. `@include js/*.js` takes every `.js` file in `js/`, in name order.
 
 - `styles.css`: all the look, including the landscape and small-screen rules.
-- `body.html`: all the markup: the ring, buttons, sheets, Settings, the guided test and the pull labeling screen.
+- `body.html`: all the markup: the ring, buttons, sheets and Settings.
 - `js/`: one script, cut into parts. They share one scope, so a part can use anything an earlier part declared. Order matters for anything that runs straight away.
   - `00-version.js`: `"use strict"` and `VERSION`. It must stay first.
   - `01-protocol.js`: the Crafty's Bluetooth addresses and value formats.
   - `02-saved-data.js`: the `store` wrapper around localStorage (read-only, full and damaged cases).
   - `03-state.js`: the live state object `S`.
   - `04-bluetooth.js`: reading, writing and subscribing to values.
-  - `05-recorder.js`: the raw data recorder (`REC`) and the labeling session's store (`LB`).
+  - `05-recorder.js`: the raw data recorder (`REC`) and `rec()`, which feeds it.
   - `06-units-and-dom.js`: °C/°F, and helpers like `$`, `put` and `render`.
   - `07-ring-and-draw.js`: ring drawing, `draw()` (the one place the screen is updated), toasts and buzz.
   - `08-writes.js`: debounced writes, so dragging doesn't flood Bluetooth.
   - `09-connection.js`: connect, disconnect, reconnect and reading the device's values.
-  - `10-estimates.js`: battery, bowl and pull estimates.
-  - `11-pull-detection.js`: the pull detector (`pdSample`, `pdEnd`). Tests check that its tuning doesn't change by accident.
-  - `12-tap-per-pull.js`: the manual + Pull button and its learning.
+  - `10-estimates.js`: the battery estimate and what it learns, and the saved session and climb clock.
+  - `12-session-and-climb.js`: sessions (heater on to off), the climb clock (minutes at temperature, carried over a quick reheat), and the once-a-few-seconds read loop.
   - `13-history.js`: session history kept on the phone.
   - `14-terpenes.js`, `15-profiles.js`, `16-lighting.js`: those features and their sheets.
   - `17-ring-controls.js`: drag the ring, and hold − or + to repeat.
   - `18-sheets-and-settings.js`: how sheets open and close (with the phone's Back button), and the Settings sheet.
-  - `19-recorder-controls.js`: recording on and off, and sharing the recording.
-  - `20-use-detector.js`: the Crafty's own use sensor.
-  - `21-guided-test.js`: the six-pull guided test.
-  - `22-labeling.js`: hold Soft, Medium or Hard while pulling, the wait after each pull (the buttons lock until the Crafty settles), the test temperature held for the session (370 °F unless picked otherwise), New test (asks to share pulls that were never shared, with Undo), old sessions from another page version (never carried on by themselves), saving, and the labeled file.
+  - `19-recorder-controls.js`: recording on and off (Settings > Diagnostics), the diagnostics poll, and sharing the recording as a CSV.
   - `23-wiring-and-start.js`: button wiring, then start-up. It must stay last.
 
-To add a part, give it a number between its neighbours, like `11a-something.js` or a renumbered set. A new file in `js/` is picked up without touching `page.html`.
+To add a part, give it a number between its neighbours, like `12a-something.js` or a renumbered set. Numbers 11 and 20 to 22 are free since r13. A new file in `js/` is picked up without touching `page.html`.
 
 ## Build
 
@@ -59,7 +55,7 @@ This runs every test against that build, comparing with the build before it wher
 
 `tests/build.test.js` checks that the page is exactly a fresh build of `src/`, that every part is used once, and that the page still loads nothing from other files.
 
-Real recordings live in `tests/data/`. Guided-test recordings are replayed by `replay.test.js`, and labeled sessions by `label-replay.test.js`. Keep `tests/` off the public site, because the recordings are the user's own sessions.
+Real recordings live in `tests/data/`. Pull counting was removed in r13, so no test replays them any more; they're kept as a record. Keep `tests/` off the public site, because the recordings are the user's own sessions.
 
 There's no real browser here. Layout tests work from the CSS, and the real check is a phone running Chrome on Android.
 

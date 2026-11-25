@@ -19,7 +19,7 @@ const CH = {
   useMins:   ["s3", U("1e3")]  // ...plus minutes (firmware 2.51 and newer)
 };
 // Undocumented diagnostics seen on older firmware (forum reverse-engineering): battery and heater voltage, battery
-// current, raw sensor temperatures. Only read while "Record raw data" is on, to find out whether any of them shows a pull.
+// current, raw sensor temperatures. Only read while "Record raw data" is on, so a recording shows what the Crafty reports.
 const DIAG = ["63", "73", "b3", "c3", "d3", "e3", "f3", "103", "113", "71"];
 const LIM = { MIN: 40, MAX: 210, BOOST_MAX: 30 };
 // Timing for connecting and for getting the Crafty back after a dropout. Kept in one object so it's easy to tune.

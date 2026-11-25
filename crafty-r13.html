@@ -1,0 +1,1641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="theme-color" content="#0a0c0f">
+<title>Crafty Remote</title>
+<style>
+/* Design system. One spacing scale (4/8/12/16/24), one type scale (12/13/15/17/20 + the big display number),
+   44px minimum touch targets, system fonts (no web-font download, so the page draws instantly even offline).
+   Performance rules: only transform/opacity animate; no SVG/CSS blur filters on anything that changes often;
+   the script only touches the DOM when a value actually changed, at most once per frame. Dark only, by choice. */
+:root{
+  --bg:#0a0c0f; --bg-2:#0f1317; --surface:#14181d; --surface-2:#1a2027; --line:#252c35; --line-2:#333c47;
+  --fg:#eef2f5; --muted:#95a1ae; --dim:#5b6571;
+  --heat:#ff6a3d; --heat-2:#ffb547; --ready:#3ddc84; --super:#ff4d7d; --accent:#7cc4ff;
+  --glow:transparent;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --r-lg:20px; --r-md:16px; --r-sm:12px; --hit:44px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.35;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+body{position:fixed;inset:0;background:linear-gradient(180deg,var(--bg-2),var(--bg) 60%)}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation;transition:transform .08s,background-color .15s,color .15s,border-color .15s,opacity .15s}
+button:active:not(:disabled){transform:scale(.96)}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=slider]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.35;cursor:default}
+.num{font-variant-numeric:tabular-nums}
+
+/* Ambient light behind the ring. Composited layer: only transform, opacity (and hue for Color cycle) animate. */
+.orb{position:fixed;left:50%;top:38%;width:120vmin;height:120vmin;margin:-60vmin 0 0 -60vmin;border-radius:50%;pointer-events:none;z-index:0;will-change:transform,opacity;
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--glow) 36%,transparent),color-mix(in srgb,var(--glow) 10%,transparent) 55%,transparent);
+  opacity:var(--orb,.5);transition:opacity .6s}
+.l-breathe .orb{animation:breathe 7s ease-in-out infinite}
+.l-breathe.heating .orb{animation-duration:2.8s}
+.l-calm .orb{animation:breathe 11s ease-in-out infinite}
+.l-cycle .orb{--glow:#ff5a8a!important;will-change:transform,opacity,filter;animation:cycle 18s linear infinite,breathe 6s ease-in-out infinite}
+.l-minimal .orb{display:none}
+@keyframes breathe{0%,100%{transform:scale(.88)}50%{transform:scale(1.04)}}
+@keyframes cycle{to{filter:hue-rotate(360deg)}}
+
+.app{position:relative;z-index:1;height:100dvh;display:flex;flex-direction:column;gap:12px;max-width:480px;margin:0 auto;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px,env(safe-area-inset-left,0px))}
+
+/* Header: who you're connected to, battery, settings */
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;min-height:var(--hit)}
+.who{display:flex;align-items:center;gap:10px;min-width:0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none;transition:background-color .3s}
+.dot.on{background:var(--ready)}
+.dot.wait{background:var(--heat-2);animation:blink 1s ease-in-out infinite}
+@keyframes blink{50%{opacity:.3}}
+.who b{display:block;font-size:17px;font-weight:600;letter-spacing:.01em}
+.who span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;gap:8px;align-items:center;flex:none}
+.chip{height:36px;display:inline-flex;align-items:center;gap:7px;padding:0 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.chip b{color:var(--fg);font-weight:600}
+.iconbtn{width:var(--hit);height:var(--hit);border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.iconbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.batt{width:21px;height:11px;border:1.5px solid currentColor;border-radius:3px;position:relative}
+.batt::after{content:"";position:absolute;right:-4px;top:2.5px;width:2px;height:3.5px;background:currentColor;border-radius:0 1px 1px 0}
+.batt i{position:absolute;left:1px;top:1px;bottom:1px;width:0;border-radius:1px;background:var(--ready)}
+
+/* The ring takes whatever height is left */
+.stage{flex:1 1 auto;min-height:0;container-type:size;display:grid;place-items:center}
+.ring{position:relative;width:min(100cqw,100cqh);aspect-ratio:1;touch-action:none;cursor:grab}
+.ring.drag{cursor:grabbing}
+.ring svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.scale{stroke:var(--line-2);stroke-width:1.5}
+.scale.major{stroke:var(--dim);stroke-width:2}
+.track{fill:none;stroke:var(--surface-2);stroke-width:18;stroke-linecap:round}
+.fill{fill:none;stroke-width:18;stroke-linecap:round;transition:stroke-dashoffset .45s cubic-bezier(.3,.7,.3,1)}
+.halo{fill:none;stroke-width:30;stroke-linecap:round;opacity:0;transition:stroke-dashoffset .45s cubic-bezier(.3,.7,.3,1),opacity .4s}
+.ring.drag .fill,.ring.drag .halo{transition:none}
+.knob{transition:transform .2s}
+.ring.drag .knob{transition:none}
+.knob circle.k{fill:var(--fg)}
+.knob circle.h{fill:none;stroke:var(--fg);stroke-opacity:.18;stroke-width:10}
+.ends{font-size:11px;fill:var(--muted);font-family:var(--font)}
+.climb-bg{fill:none;stroke:var(--surface-2);stroke-width:3;stroke-linecap:round}
+.climb-arc{fill:none;stroke:var(--heat-2);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .5s}
+
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding-bottom:7%}
+.state{font-size:clamp(11px,3.6cqmin,13px);font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);transition:color .3s}
+.state.heating{color:var(--heat)} .state.ready{color:var(--ready)}
+.now{font-weight:200;font-size:clamp(52px,27cqmin,112px);line-height:1;letter-spacing:-.03em;margin:.06em 0 .05em}
+.now sup{font-size:.3em;font-weight:500;vertical-align:1.15em;margin-left:3px;color:var(--muted);letter-spacing:0}
+.tgt{font-size:clamp(13px,4.6cqmin,17px);color:var(--muted)}
+.tgt b{font-weight:600;color:var(--fg);font-size:1.25em}
+.ring.drag .tgt b{color:var(--accent)}
+.eff{font-size:clamp(11px,3.6cqmin,13px);color:var(--heat-2);min-height:1.4em;margin-top:4px;max-width:70%}
+
+/* − and + sit in the open bottom of the ring */
+.nudge{position:absolute;left:0;right:0;bottom:1%;display:flex;justify-content:center;gap:26%;pointer-events:none}
+.nudge button{pointer-events:auto;width:clamp(48px,16cqmin,60px);aspect-ratio:1;border-radius:50%;background:var(--surface);border:1px solid var(--line-2);font-size:clamp(22px,7cqmin,28px);font-weight:300;display:grid;place-items:center}
+.nudge button:active:not(:disabled){background:var(--surface-2)}
+
+/* Bowl and battery, side by side */
+.strip{flex:none;display:grid;grid-template-columns:1fr;gap:8px}
+.tile{min-width:0;padding:10px 14px 12px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.tile .k{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-height:24px}
+.tile .v{font-size:22px;font-weight:500;line-height:1.15;white-space:nowrap}
+.tile .v small{font-size:12px;font-weight:400;color:var(--muted);margin-left:4px}
+.tile .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:10px;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:6px;border:1px solid var(--line-2);color:var(--muted);text-transform:uppercase}
+/* Small visual button with a full 44px tap area */
+
+/* Profile + quick temps */
+.quick{flex:none;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px}
+#presets{display:contents}
+.qbtn{min-height:48px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line);font-size:16px;font-weight:500;color:var(--muted)}
+.qbtn.on{color:var(--fg);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--surface))}
+.prof{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 12px;color:var(--fg);min-width:0;text-align:left}
+.prof span{min-width:0;overflow:hidden}
+.prof b,.prof small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof b{font-size:14px;font-weight:600}
+.prof small{font-size:11px;color:var(--muted);font-weight:400}
+.prof svg{width:12px;height:12px;flex:none;stroke:var(--muted);fill:none;stroke-width:2}
+.prof.climb{border-color:color-mix(in srgb,var(--heat-2) 55%,var(--line))}
+.prof.climb small{color:var(--heat-2)}
+
+.main{flex:none;min-height:60px;border-radius:18px;font-size:17px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:10px}
+.mainrow{flex:none;display:flex;gap:8px}
+.mainrow .main{flex:1;min-width:0}
+.main.connect{background:var(--accent);color:#04121f}
+.main.on{background:linear-gradient(135deg,var(--heat-2),var(--heat));color:#1d0a03}
+.main.off{background:var(--surface-2);border:1px solid var(--line-2)}
+.main .spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint{flex:none;margin:-4px 8px 0;text-align:center;font-size:12px;color:var(--muted)}
+.btn[aria-disabled=true]{opacity:.4}
+/* Before the first connection the estimates have nothing to show, so they step aside */
+.app.offline .strip{display:none}
+
+/* Toasts sit above the sheets so an Undo is always reachable. Tap one to dismiss it. */
+.toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:448px;margin:0 auto;display:flex;align-items:center;gap:10px;font-size:14px;line-height:1.45;color:var(--fg);background:#1f262f;border:1px solid var(--line-2);border-radius:14px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:12;animation:pop .18s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}}
+.toast.err{color:#ffd8cd;background:#2a1712;border-color:#5a2c20}
+.toast span{flex:1;min-width:0}
+.toast .tact{flex:none;font-weight:600;min-height:var(--hit);padding:0 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line-2);color:var(--accent)}
+
+/* Sheets slide up from the bottom. Close with Done, a tap outside, a swipe down, or the phone's Back button. */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s;z-index:8}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;z-index:9;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;
+  padding:6px max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px,env(safe-area-inset-left,0px));
+  transform:translateY(105%);transition:transform .28s cubic-bezier(.3,.7,.3,1);will-change:transform;display:flex;flex-direction:column;max-height:88dvh}
+.sheet.dragging{transition:none}
+.open .scrim{opacity:1;pointer-events:auto}
+.open .sheet{transform:none}
+.shead{flex:none;touch-action:none;padding-bottom:8px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line-2);margin:4px auto 8px}
+.shead .bar2{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.shead h2{margin:0;font-size:20px;font-weight:600}
+.shead h2 .ver{font-size:12px;font-weight:500;color:var(--muted);margin-left:6px;letter-spacing:.02em}
+.scroll{overflow-y:auto;scrollbar-width:none;display:flex;flex-direction:column;gap:6px;padding-bottom:4px;overscroll-behavior:contain}
+.scroll::-webkit-scrollbar{display:none}
+/* A scrolling column must never squeeze its contents: a box with overflow:hidden (like .group) would otherwise
+   shrink to just its border when the sheet is shorter than its content. Everything inside keeps its full height and the column scrolls. */
+.scroll>*{flex-shrink:0}
+.glabel{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 4px 2px}
+.glabel:first-child{margin-top:2px}
+.group{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.row{min-height:56px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line)}
+.group>.row:first-child,.group>.row[hidden]+.row{border-top:0}
+.row>div{min-width:0}
+.row b{display:block;font-weight:500}
+.row small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.row.stack{flex-direction:column;align-items:stretch}
+.val{font-weight:600;white-space:nowrap}
+.btn{min-height:var(--hit);padding:0 16px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line-2);font-size:14px;font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
+.btn.danger{color:#ff9b86}
+.btn.wide{width:100%}
+.note{font-size:12px;color:var(--muted);line-height:1.5;padding:0 4px}
+.note b{color:var(--fg);font-weight:600}
+.warn{font-size:13px;line-height:1.45;color:#ffd8cd;background:#2a1712;border:1px solid #5a2c20;border-radius:var(--r-sm);padding:10px 12px}
+input[type=range]{width:100%;height:var(--hit);accent-color:var(--accent);margin:0}
+/* On/off switch */
+.switch{position:relative;flex:none;width:52px;height:32px;border-radius:16px;background:var(--line-2);transition:background-color .2s}
+.switch::before{content:"";position:absolute;inset:-6px -4px}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:var(--fg);transition:transform .2s}
+.switch[aria-checked=true]{background:var(--accent)}
+.switch[aria-checked=true]::after{transform:translateX(20px)}
+.switch:active:not(:disabled){transform:none}
+/* Segmented choice */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:3px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line)}
+.seg button{min-height:var(--hit);padding:0 10px;border-radius:9px;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--surface-2);color:var(--fg);box-shadow:0 0 0 1px var(--line-2)}
+.stepper{display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px;flex:none}
+.stepper button{width:var(--hit);height:40px;border-radius:9px;font-size:20px}
+.stepper output{min-width:48px;text-align:center;font-size:16px;font-weight:500}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 14px 12px}
+.chips.two{grid-template-columns:1fr 1fr}
+.chips button{min-height:var(--hit);padding:4px 6px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.2}
+.chips button.on{border-color:var(--accent);color:var(--fg);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+/* History */
+.life{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.life div{padding:10px 12px;border-radius:var(--r-sm);background:var(--surface-2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.life b{display:block;font-size:18px;font-weight:500;color:var(--fg)}
+.hrow{padding:10px 12px;border-radius:var(--r-sm);background:var(--surface-2);border:1px solid var(--line)}
+.hrow b{font-weight:500;font-size:14px}
+.hrow div{font-size:12px;color:var(--muted);margin-top:2px}
+/* Profiles */
+.prow{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;min-height:60px;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.prow.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.prow .pick{flex:1;min-width:0;text-align:left;min-height:var(--hit);display:flex;align-items:center;gap:10px}
+.prow .pick i{width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex:none}
+.prow.on .pick i{border:5px solid var(--accent)}
+.prow .pick b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .pick small{display:block;font-size:12px;color:var(--muted)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 14px 14px}
+.form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);min-width:0}
+.form .wide{grid-column:1/-1}
+.form input,.form select{font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:0 12px;min-height:var(--hit);width:100%;-webkit-user-select:text;user-select:text}
+.form input:disabled{opacity:.45}
+.form .hintline{grid-column:1/-1;font-size:12px;color:var(--heat-2);min-height:1.2em;margin-top:-4px}
+.btns{display:flex;gap:8px;grid-column:1/-1}
+.btns .btn{flex:1}
+
+@media (max-height:640px){ .tile .s{display:none} .hint{display:none} .quick .qbtn{min-height:44px} .main{min-height:54px} }
+/* Phone turned sideways: ring on the left, controls on the right, still one screen */
+@media (orientation:landscape) and (max-height:560px){
+  .app{max-width:920px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);grid-template-rows:auto 1fr auto auto auto;column-gap:20px}
+  header{grid-column:1/-1}
+  .stage{grid-column:1;grid-row:2/6}
+  .strip{grid-column:2;grid-row:2;align-self:end}
+  .quick{grid-column:2;grid-row:3}
+  .mainrow{grid-column:2;grid-row:4}
+  .hint{grid-column:2;grid-row:5}
+  .sheet{max-height:94dvh}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body class="l-breathe">
+<div class="orb" id="orb" aria-hidden="true"></div>
+<div class="app offline" id="app">
+  <header>
+    <div class="who"><i class="dot" id="dot"></i><div><b id="devTitle">Crafty</b><span id="devName">Not connected</span></div></div>
+    <div class="tools">
+      <span class="chip num" id="battChip" hidden><span class="batt"><i id="battFill"></i></span><b id="battPct">--</b></span>
+      <button class="iconbtn" id="gearBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="ring" id="ring" role="slider" tabindex="0" aria-label="Target temperature" aria-valuemin="40" aria-valuemax="210">
+      <svg viewBox="0 0 300 300" aria-hidden="true">
+        <defs>
+          <linearGradient id="gHeat" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ffb547"/><stop offset="1" stop-color="#ff5a36"/></linearGradient>
+          <linearGradient id="gReady" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7cf0b0"/><stop offset="1" stop-color="#2fd07a"/></linearGradient>
+          <linearGradient id="gIdle" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#5a6470"/><stop offset="1" stop-color="#8b96a3"/></linearGradient>
+        </defs>
+        <g id="scale"></g>
+        <path class="track" id="track"/>
+        <path class="halo" id="halo"/>
+        <path class="fill" id="fill"/>
+        <path class="climb-bg" id="climbBg" opacity="0"/>
+        <path class="climb-arc" id="climbArc" opacity="0"/>
+        <text class="ends" id="endLo" text-anchor="middle"></text>
+        <text class="ends" id="endHi" text-anchor="middle"></text>
+        <g class="knob" id="knob" opacity="0"><circle class="h" r="15"/><circle class="k" r="10"/></g>
+      </svg>
+      <div class="center">
+        <div class="state" id="state">Offline</div>
+        <div class="now num"><span id="nowNum">--</span><sup id="nowUnit">°F</sup></div>
+        <div class="tgt num">Target <b id="target">--</b></div>
+        <div class="eff" id="eff"></div>
+      </div>
+      <div class="nudge">
+        <button id="minus" aria-label="Lower target" disabled>−</button>
+        <button id="plus" aria-label="Raise target" disabled>+</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip" id="strip">
+    <div class="tile">
+      <div class="k">Battery <span class="badge" id="fcConf" hidden>estimate</span></div>
+      <div class="v num" id="fcMain">--</div>
+      <div class="s" id="fcSub">Connect to estimate</div>
+    </div>
+  </div>
+
+  <div class="quick">
+    <button class="qbtn prof" id="profBtn" aria-label="Profiles and terpenes"><span><b id="profName">Default</b><small id="profSub">Steady</small></span><svg viewBox="0 0 12 12"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+    <div id="presets"></div>
+  </div>
+
+  <div class="mainrow">
+    <button class="main connect" id="mainBtn"><i class="spin" id="mainSpin" hidden></i><span id="mainTxt">Connect to Crafty</span></button>
+  </div>
+  <p class="hint" id="hint">Press the Crafty's button once to wake it, then tap Connect.</p>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<div id="sheetWrap">
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-label="Settings">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2>Settings <small class="ver" id="verTag"></small></h2><button class="btn" id="setDone">Done</button></div></div>
+    <div class="scroll">
+      <div class="warn" id="storeNote" hidden></div>
+
+      <div class="glabel" role="heading" aria-level="2">Your Crafty</div>
+      <div class="group">
+        <div class="row"><div><b id="fwTitle">Not connected</b><small id="fwInfo">Connect to see details</small></div><button class="btn" id="discBtn" disabled>Disconnect</button></div>
+        <div class="row"><div><b>Boost amount</b><small>Added on top when you start boost with the Crafty's button</small></div>
+          <div class="stepper"><button id="bMinus" aria-label="Less boost" disabled>−</button><output class="num" id="boostVal">--</output><button id="bPlus" aria-label="More boost" disabled>+</button></div></div>
+        <div class="row stack"><div class="bar2" style="display:flex;justify-content:space-between"><b>LED brightness</b><span class="val num" id="ledVal">--</span></div>
+          <input type="range" id="led" min="0" max="100" step="5" aria-label="LED brightness" disabled></div>
+        <div class="row"><div><b>Find my Crafty</b><small>Buzzes and blinks for about 30 seconds</small></div><button class="btn" id="findBtn" disabled>Find</button></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Display</div>
+      <div class="group">
+        <div class="row"><b>Temperature in</b><div class="seg" style="width:140px"><button id="unitF">°F</button><button id="unitC">°C</button></div></div>
+        <div class="row" style="padding-bottom:0;min-height:44px"><div><b>Screen lighting</b><small>The glow behind the dial. The Crafty's own light only takes a brightness.</small></div></div>
+        <div class="chips" id="lights"></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Diagnostics</div>
+      <div class="group">
+        <div class="row"><div><b>Record raw data</b><small>Saves every reading from the Crafty, to share if something misbehaves</small></div><button class="switch" id="recBtn" role="switch" aria-checked="false" aria-label="Record raw data"></button></div>
+        <div class="row" id="recRow" hidden><div><b id="recTitle">Recording</b><small id="recInfo">0 readings</small></div><div style="display:flex;gap:8px"><button class="btn" id="recClear">Clear</button><button class="btn primary" id="recShare">Share</button></div></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Stats</div>
+      <div class="group">
+        <div class="row"><div><b>History</b><small>Your sessions and the Crafty's lifetime heater time</small></div><button class="btn" id="histBtn">Open</button></div>
+        <div class="row"><div><b>Battery health</b><small id="healthSub">Learning</small></div><span class="val num" id="healthVal">--</span></div>
+        <div class="row"><div><b>Reset learning</b><small>Forget what the battery estimate and your usual session length have learned</small></div><button class="btn danger" id="resetFc">Reset</button></div>
+      </div>
+
+      <div class="glabel" role="heading" aria-level="2">Help</div>
+      <p class="note"><b>Trouble connecting?</b> Use Chrome on Android with Bluetooth on (and Location, on Android 11 or older). Press the Crafty's button once to wake it, and close the S&amp;B web app or any other phone connected to it.</p>
+      <p class="note">Drag the ring or tap − and + to set the temperature. The page keeps to the Crafty's own 40–210 °C range. Boost and superboost can only be started with the button on the Crafty. Battery figures are estimates that learn from how you use it.</p>
+      <p class="note" id="verNote"></p>
+    </div>
+  </div>
+</div>
+
+<div id="histWrap">
+  <div class="scrim" id="histScrim"></div>
+  <div class="sheet" id="histSheet" role="dialog" aria-label="History">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2>History</h2><button class="btn" id="histClose">Done</button></div></div>
+    <div class="scroll">
+      <div class="life" id="life"></div>
+      <div class="glabel" role="heading" aria-level="2">Sessions</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="histList"></div>
+      <div class="row" style="border:0;padding:8px 4px"><span class="note" style="padding:0">Kept on this phone only. Battery use is an estimate.</span><button class="btn danger" id="histClear">Clear</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="profWrap">
+  <div class="scrim" id="profScrim"></div>
+  <div class="sheet" id="profSheet" role="dialog" aria-label="Profiles">
+    <div class="shead"><div class="grab"></div><div class="bar2"><h2 id="profTitle">Profiles</h2><button class="btn" id="profDone">Done</button></div></div>
+    <div class="scroll">
+      <div id="profListView">
+        <div class="glabel" role="heading" aria-level="2">Profiles</div>
+        <div class="group" id="profList"></div>
+        <button class="btn wide" id="profNew" style="margin-top:8px">New profile</button>
+        <p class="note" style="margin-top:8px">A climb profile starts low and steps up on its own every few minutes at temperature, so you get flavor first and the rest later.</p>
+        <div class="glabel" role="heading" aria-level="2">Aim for a terpene</div>
+        <div class="group"><div class="chips two" id="terps"></div></div>
+        <p class="note" id="terpNote">Sets the temperature near where that terpene boils. Flower always gives off a mix, so this leans the flavor, it doesn't isolate one.</p>
+      </div>
+      <div id="profEditView" hidden>
+        <div class="group">
+          <div class="form">
+            <label class="wide">Name<input id="pfName" maxlength="24" autocomplete="off" enterkeyhint="done"></label>
+            <div class="seg wide"><button id="pfSteady" type="button">Steady</button><button id="pfClimb" type="button">Climb</button></div>
+            <label class="wide">Start from a terpene<select id="pfTerp"></select></label>
+            <label>Start temp <span class="pfU"></span><input id="pfBase" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Top temp <span class="pfU"></span><input id="pfMax" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Step up by <span class="pfU"></span><input id="pfStep" type="number" inputmode="numeric"></label>
+            <label class="climbOnly">Every (minutes at temp)<input id="pfMins" type="number" inputmode="numeric" step="1" min="1" max="15"></label>
+            <div class="hintline climbOnly" id="pfHint"></div>
+            <label class="wide">Screen lighting<select id="pfLight"></select></label>
+            <div class="btns"><button class="btn danger" id="pfDel" type="button">Delete</button><button class="btn" id="pfCancel" type="button">Cancel</button><button class="btn primary" id="pfSave" type="button">Save</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const VERSION = "2026-11-25 r13"; // bump on every build; tests/layout.test.js fails if the page changes without it
+// ---- Protocol (from the open-source reactive-volcano-app, storzandbickel-ble and gocrafty projects) ----
+const SUFFIX = "-4c45-4b43-4942-265a524f5453";
+const U = h => h.padStart(8, "0") + SUFFIX;
+const SVC = { s1: U("1"), s2: U("2"), s3: U("3") };
+const CH = {
+  current:   ["s1", U("11")], // °C x10 (0.1 °C steps), notify
+  target:    ["s1", U("21")], // °C x10, read/write (°F x10 when the Crafty is set to °F)
+  boost:     ["s1", U("31")], // boost offset °C x10, read/write
+  battery:   ["s1", U("41")], // %, notify
+  led:       ["s1", U("51")], // 0-100
+  heaterOn:  ["s1", U("81")], // write 0x0000
+  heaterOff: ["s1", U("91")], // write 0x0000
+  firmware:  ["s2", U("32")], // text, e.g. "V03.10"
+  serial:    ["s2", U("52")], // text, first 8 chars
+  project:   ["s3", U("93")], // bit4 heater, bit5 boost, bit6 superboost, bit8 at temperature
+  status2:   ["s3", U("1c3")], // bit2 setpoint reached (pulses ~2 s), bit3 find device
+  power:     ["s3", U("83")],  // bit0 charger connected
+  useHours:  ["s3", U("23")],  // lifetime heater use, whole hours
+  useMins:   ["s3", U("1e3")]  // ...plus minutes (firmware 2.51 and newer)
+};
+// Undocumented diagnostics seen on older firmware (forum reverse-engineering): battery and heater voltage, battery
+// current, raw sensor temperatures. Only read while "Record raw data" is on, so a recording shows what the Crafty reports.
+const DIAG = ["63", "73", "b3", "c3", "d3", "e3", "f3", "103", "113", "71"];
+const LIM = { MIN: 40, MAX: 210, BOOST_MAX: 30 };
+// Timing for connecting and for getting the Crafty back after a dropout. Kept in one object so it's easy to tune.
+const CFG = { connectTimeout: 12000, opTimeout: 6000, retryDelays: [1000, 2000, 4000, 8000, 15000, 30000, 30000], resumeWindow: 5 * 60000 };
+const BIT = { HEATER: 1 << 4, BOOST: 1 << 5, SUPER: 1 << 6, ATTEMP: 1 << 8, READY: 1 << 2, FIND: 1 << 3 };
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const u16 = dv => !dv || dv.byteLength === 0 ? 0 : dv.byteLength === 1 ? dv.getUint8(0) : dv.getUint16(0, true);
+const enc16 = v => { const b = new ArrayBuffer(2); new DataView(b).setUint16(0, Math.round(v) & 0xffff, true); return b; };
+const text = dv => new TextDecoder().decode(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)).replace(/\0+$/, "").trim();
+const hex = dv => !dv || !dv.byteLength ? "" : Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength), x => x.toString(16).padStart(2, "0")).join(" ");
+const shortId = uuid => String(uuid).slice(0, 8).replace(/^0+/, "");
+const nowMs = () => Date.now();
+
+// ---- Saved data ----
+// Everything is kept in this browser's localStorage. Every read is checked and falls back to a safe default,
+// so cleared, blocked, full or damaged storage can never stop the page from working.
+// SCHEMA goes up whenever a saved shape changes; a page older than the saved data won't overwrite it.
+// 2: pulls measured relative to your usual pull; climb profiles step by % of the bowl.
+// 3 (r13): pull counting and the bowl estimate removed. Climb profiles step every few minutes at temperature.
+const SCHEMA = 3;
+const KEY = { unit: "crafty-unit", model: "crafty-model-v2", bowl: "crafty-bowl" /* the live session and climb clock; the name is older than the change */, prof: "crafty-profiles", light: "crafty-light", hist: "crafty-history", schema: "crafty-schema" };
+const store = {
+  ok: true, readOnly: false, damaged: [], full: false,
+  raw(k) { try { return localStorage.getItem(k); } catch (e) { store.ok = false; return null; } },
+  // Parsed JSON, or null when missing. Damaged data is set aside under "<key>-damaged" (not thrown away) and reported.
+  json(k) {
+    const s = store.raw(k); if (s == null) return null;
+    try { return JSON.parse(s); } catch (e) {
+      store.damaged.push(k);
+      try { localStorage.setItem(k + "-damaged", s); localStorage.removeItem(k); } catch (x) {}
+      return null;
+    }
+  },
+  set(k, v, onFull) {
+    if (!store.ok || store.readOnly) return false;
+    try { localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v)); return true; }
+    catch (e) {
+      if (/quota/i.test(e && (e.name + e.message)) && onFull && onFull()) return store.set(k, v); // make room, try once more
+      if (!store.full) { store.full = true; toast("This phone's storage for the page is full, so recent changes aren't being saved.", 0, null, "err"); }
+      return false;
+    }
+  }
+};
+(function checkSchema() {
+  const v = parseInt(store.raw(KEY.schema), 10);
+  if (v > SCHEMA) store.readOnly = true; // saved by a newer version of this page: read it, don't overwrite it
+  else if (v !== SCHEMA && store.ok) { try { localStorage.setItem(KEY.schema, String(SCHEMA)); } catch (e) { store.ok = false; } }
+})();
+// Pull counting was removed in r13: soft and medium pulls don't show in anything the Crafty reports over Bluetooth.
+// What older pages saved for it (detector settings, labeled sessions) is removed quietly, so nothing stale lingers.
+const GONE = ["crafty-pd", "crafty-label", "crafty-label-rows", "crafty-label-done", "crafty-label-temp"];
+(function dropPullData() {
+  if (!store.ok || store.readOnly) return;
+  for (const k of GONE) for (const x of [k, k + "-damaged"]) { try { localStorage.removeItem(x); } catch (e) {} }
+})();
+const num = (v, d, lo = -Infinity, hi = Infinity) => typeof v === "number" && isFinite(v) ? clamp(v, lo, hi) : d;
+
+// ---- State ----
+const S = { device: null, svcs: {}, chars: {}, connected: false, connecting: false, current: null, target: null, boost: null,
+            battery: null, led: null, project: 0, status2: 0, power: 0, seen: {}, lifeH: null, lifeM: null, fw: "", serial: "",
+            unit: "F", devF: false, pending: false, dragging: false,
+            reconnecting: false, userDisc: false, lostAt: 0, retryT: null, everConnected: false };
+{ const u = store.raw(KEY.unit); if (u === "C" || u === "F") S.unit = u; }
+
+// ---- Bluetooth operations ----
+// The Crafty takes one operation at a time. Writes (your taps) jump ahead of background reads, a read that's
+// already waiting isn't queued twice, and nothing can wait forever: a stuck operation times out and the next one runs.
+const withTimeout = (p, ms) => new Promise((res, rej) => {
+  const t = setTimeout(() => rej(ERR("TimeoutError")), ms);
+  p.then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); });
+});
+const ERR = (name, message = "") => Object.assign(new Error(message), { name });
+const ops = []; let opBusy = false;
+function gatt(fn, o = {}) {
+  if (o.key) { const q = ops.find(x => x.key === o.key); if (q) return q.p; }
+  const op = { fn, key: o.key || null, prio: !!o.prio, timeout: o.timeout || CFG.opTimeout };
+  op.p = new Promise((res, rej) => { op.res = res; op.rej = rej; });
+  if (op.prio) { const i = ops.findIndex(x => !x.prio); i < 0 ? ops.push(op) : ops.splice(i, 0, op); } else ops.push(op);
+  pump();
+  return op.p;
+}
+async function pump() {
+  if (opBusy) return;
+  const op = ops.shift(); if (!op) return;
+  opBusy = true;
+  try { op.res(await withTimeout(Promise.resolve().then(op.fn), op.timeout)); } catch (e) { op.rej(e); }
+  opBusy = false; pump();
+}
+const flushOps = () => { for (const op of ops.splice(0)) op.rej(ERR("NetworkError", "disconnected")); };
+const read = k => S.chars[k] ? gatt(() => S.chars[k].readValue(), { key: "r:" + k }) : Promise.resolve(null);
+const write = (k, buf) => {
+  if (!S.chars[k]) return Promise.reject(new Error("your Crafty doesn't offer this over Bluetooth"));
+  rec("write", k, hex(new DataView(buf)), u16(new DataView(buf)));
+  return gatt(() => (S.chars[k].writeValueWithResponse || S.chars[k].writeValue).call(S.chars[k], buf), { prio: true });
+};
+
+// ---- Raw data recorder (Settings > Diagnostics) ----
+// Off by default. While on, every reading and write is kept in memory with a timestamp, and every characteristic
+// the Crafty offers is listed once, so a problem can be looked into from real data.
+// Nothing is sent anywhere: Share hands a CSV file to the phone's share sheet (or saves it to Downloads).
+const REC = { on: false, rows: [], t0: 0, dropped: 0, probed: false, probing: false, diag: [], max: 60000 };
+function rec(kind, key, a = "", b = "", note = "") {
+  if (!REC.on) return;
+  if (REC.rows.length >= REC.max) { REC.rows.splice(0, 10000); REC.dropped += 10000; }
+  REC.rows.push([nowMs(), kind, key, a, b, note]);
+  render();
+}
+// ---- Units ----
+const toU = c => S.unit === "F" ? c * 9 / 5 + 32 : c;
+const fromU = v => S.unit === "F" ? (v - 32) * 5 / 9 : v;
+const dU = c => S.unit === "F" ? c * 9 / 5 : c;
+const fmt = c => c == null ? "--" : String(Math.round(toU(c)));
+const PRESETS = { C: [185, 195, 205], F: [365, 380, 400] };
+const snapC = c => clamp(fromU(Math.round(toU(c))), LIM.MIN, LIM.MAX); // whole display degrees
+// A Crafty set to Fahrenheit reports its target in °F x10 (above 210 can only be °F). Its current temperature is
+// assumed to follow the same setting.
+const fToC = f => (f - 32) / 1.8;
+function readTarget(dv) { const t = u16(dv) / 10; if (t > LIM.MAX) { S.devF = true; return fToC(t); } if (t >= LIM.MIN) S.devF = false; return t; }
+// Above 260 can only be °F (the chamber never gets that hot in °C), so it also catches °F before the target is read
+function readCurrent(dv) { const t = u16(dv) / 10; if (t > 260 && t <= 450) S.devF = true; return S.devF ? fToC(t) : t; }
+// Writes go back in the Crafty's own unit. The boost offset is assumed to follow it too (a difference, so x1.8);
+// whatever the truth, reading then rewriting it gives back the same raw number.
+const rawTarget = c => enc16((S.devF ? c * 1.8 + 32 : c) * 10);
+const rawBoost = c => enc16((S.devF ? c * 1.8 : c) * 10);
+
+// ---- DOM helpers ----
+// Lookups are cached, and put() only touches the page when a value really changed. Updates are drawn at most
+// once per frame (render() just asks for a frame), so a burst of Bluetooth readings costs one redraw.
+const EL = {};
+const $ = id => EL[id] || (EL[id] = document.getElementById(id));
+const memo = new WeakMap();
+function put(el, k, v) {
+  let m = memo.get(el); if (!m) memo.set(el, m = {});
+  if (m[k] === v) return;
+  m[k] = v;
+  if (k === "text") el.textContent = v;
+  else if (k === "class") el.className = v;
+  else if (k === "hidden" || k === "disabled") el[k] = v;
+  else if (k[0] === "@") el.setAttribute(k.slice(1), v);
+  else if (k[0] === "-") el.style.setProperty(k, v);
+  else el.style[k] = v;
+}
+let booted = false, framePending = false;
+const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : f => setTimeout(f, 16);
+function render() {
+  if (!booted || framePending) return;
+  framePending = true;
+  raf(() => { framePending = false; draw(); });
+}
+
+// ---- Ring geometry (viewBox 300x300) ----
+const CX = 150, CY = 150, R = 122, ARC0 = 135, SWEEP = 270;
+const pt = (deg, r = R) => { const a = deg * Math.PI / 180; return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; };
+const frac = c => clamp((c - LIM.MIN) / (LIM.MAX - LIM.MIN), 0, 1);
+const arcD = r => { const [x0, y0] = pt(ARC0, r), [x1, y1] = pt(ARC0 + SWEEP, r); return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 1 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
+const arcLen = r => 2 * Math.PI * r * SWEEP / 360;
+const ARCLEN = arcLen(R), CLIMBLEN = arcLen(R - 34);
+(function drawRing() {
+  for (const id of ["track", "fill", "halo"]) $(id).setAttribute("d", arcD(R));
+  for (const id of ["climbBg", "climbArc"]) $(id).setAttribute("d", arcD(R - 34));
+  for (const [id, len] of [["fill", ARCLEN], ["halo", ARCLEN], ["climbArc", CLIMBLEN]]) { $(id).style.strokeDasharray = len; $(id).style.strokeDashoffset = len; }
+  // Scale ticks every 10 °C, longer every 50
+  let html = "";
+  for (let c = LIM.MIN; c <= LIM.MAX; c += 10) {
+    const a = ARC0 + SWEEP * frac(c), major = c % 50 === 0;
+    const [ax, ay] = pt(a, R - 16), [bx, by] = pt(a, R - (major ? 26 : 21));
+    html += `<line class="scale${major ? " major" : ""}" x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}"/>`;
+  }
+  $("scale").innerHTML = html;
+  const [lx, ly] = pt(ARC0, R + 24), [hx, hy] = pt(ARC0 + SWEEP, R + 24);
+  $("endLo").setAttribute("x", lx.toFixed(1)); $("endLo").setAttribute("y", (ly + 4).toFixed(1));
+  $("endHi").setAttribute("x", hx.toFixed(1)); $("endHi").setAttribute("y", (hy + 4).toFixed(1));
+})();
+
+const effTarget = () => clamp((S.target || 0) + ((S.project & BIT.BOOST) || (S.project & BIT.SUPER) ? (S.boost || 0) : 0), LIM.MIN, LIM.MAX);
+const heatingNow = () => S.connected && !!(S.project & BIT.HEATER);
+const readyNow = () => heatingNow() && !S.dragging && (!!(S.project & BIT.ATTEMP) ||
+  (S.current != null && S.target != null && Math.abs(S.current - effTarget()) <= 2));
+
+function draw() {
+  const on = S.connected, heating = heatingNow(), ready = readyNow();
+  const boost = !!(S.project & BIT.BOOST), sup = !!(S.project & BIT.SUPER);
+
+  put($("app"), "class", "app" + (!on && !S.reconnecting ? " offline" : ""));
+  put($("nowNum"), "text", fmt(S.current));
+  put($("nowUnit"), "text", "°" + S.unit);
+  put($("target"), "text", S.target == null ? "--" : fmt(S.target) + "°");
+  put($("endLo"), "text", fmt(LIM.MIN) + "°");
+  put($("endHi"), "text", fmt(LIM.MAX) + "°");
+
+  // The line under the target: what matters most right now
+  const eff = sup ? "Superboost on" : boost && S.boost ? `Boost on, heading to ${fmt(effTarget())}°`
+    : climbText() || terpText() || (heating && !ready ? "Heating up" : "");
+  put($("eff"), "text", eff);
+
+  const st = $("state");
+  put(st, "class", "state" + (on && ready ? " ready" : heating ? " heating" : ""));
+  put(st, "text", S.reconnecting ? "Reconnecting" : S.connecting ? "Connecting" : !on ? (S.device ? "Disconnected" : "Offline")
+    : ready ? "Ready" : heating ? "Heating" : "Heater off");
+
+  const grad = !on ? "gIdle" : ready ? "gReady" : heating ? "gHeat" : "gIdle";
+  const off = S.current == null ? ARCLEN : ARCLEN * (1 - frac(S.current));
+  for (const id of ["fill", "halo"]) { put($(id), "stroke", `url(#${grad})`); put($(id), "strokeDashoffset", String(off)); }
+  put($("halo"), "opacity", heating ? "0.18" : "0");
+  applyLighting(on, heating, ready);
+
+  const ring = $("ring");
+  if (S.target != null && on) {
+    const [x, y] = pt(ARC0 + SWEEP * frac(S.target));
+    put($("knob"), "@transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    put($("knob"), "@opacity", "1");
+    put(ring, "@aria-valuenow", String(Math.round(S.target)));
+    put(ring, "@aria-valuetext", fmt(S.target) + " degrees " + (S.unit === "F" ? "Fahrenheit" : "Celsius"));
+  } else put($("knob"), "@opacity", "0");
+  put($("minus"), "disabled", !on || S.target == null);
+  put($("plus"), "disabled", !on || S.target == null);
+
+  // Main button
+  const mb = $("mainBtn");
+  let cls, label, dis = false, spin = false;
+  if (!on) {
+    cls = "main connect"; spin = S.connecting;
+    label = S.connecting ? (S.reconnecting ? "Reconnecting…" : "Connecting…") : S.reconnecting ? "Reconnecting… tap to try now" : S.device ? "Reconnect" : "Connect to Crafty";
+    dis = S.connecting;
+  } else if (!S.chars.heaterOn || !S.chars.heaterOff) { cls = "main off"; label = "Heater is controlled on the Crafty"; dis = true; }
+  else if (S.pending) { cls = "main " + (S.pending === "on" ? "on" : "off"); label = S.pending === "on" ? "Starting heater…" : "Turning off…"; spin = true; dis = true; }
+  else { cls = "main " + (heating ? "on" : "off"); label = heating ? "Turn heater off" : "Turn heater on"; }
+  put(mb, "class", cls); put(mb, "disabled", dis); put($("mainTxt"), "text", label);
+  put($("mainSpin"), "hidden", !spin);
+  const noBt = !navigator.bluetooth ? noBluetoothReason() : "";
+  put($("hint"), "text", noBt || "Press the Crafty's button once to wake it, then tap Connect.");
+  put($("hint"), "hidden", on || S.reconnecting);
+
+  // Header
+  put($("dot"), "class", "dot" + (on ? " on" : S.connecting || S.reconnecting ? " wait" : ""));
+  put($("devName"), "text", on ? "Connected" + (S.fw ? " · " + S.fw : "") : S.reconnecting ? "Connection dropped, reconnecting" : S.connecting ? "Connecting" : S.device ? "Disconnected" : "Not connected");
+  put($("battChip"), "hidden", S.battery == null || !on);
+  if (S.battery != null) {
+    put($("battPct"), "text", S.battery + "%");
+    put($("battFill"), "width", clamp(S.battery, 0, 100) * 0.16 + "px");
+    put($("battFill"), "background", S.battery <= 15 ? "var(--heat)" : charging() ? "var(--accent)" : "var(--ready)");
+  }
+
+  // Quick temps
+  const ps = $("presets");
+  if (ps.dataset.unit !== S.unit) {
+    ps.replaceChildren(...PRESETS[S.unit].map(v => {
+      const b = document.createElement("button"); b.className = "qbtn num"; b.textContent = v + "°";
+      b.dataset.c = fromU(v); b.addEventListener("click", () => { handSet(); setTarget(+b.dataset.c, 0); buzz(6); }); return b;
+    }));
+    ps.dataset.unit = S.unit;
+  }
+  for (const b of ps.children) { put(b, "disabled", !on); put(b, "class", "qbtn num" + (S.target != null && Math.abs(+b.dataset.c - S.target) < 0.6 ? " on" : "")); }
+
+  drawSettings();
+  renderForecast();
+  renderClimb();
+  drawRec();
+}
+
+let toastT = null;
+// toast(message, ms, action, kind): ms 0 keeps it until tapped; action {label, fn} adds a button such as Undo; kind "err" for problems.
+function toast(msg, ms = 4500, action = null, kind = "") {
+  const t = $("toast"), s = document.createElement("span"); s.textContent = msg;
+  const kids = [s];
+  if (action) {
+    const b = document.createElement("button"); b.className = "tact"; b.textContent = action.label;
+    b.addEventListener("click", ev => { ev.stopPropagation(); t.hidden = true; action.fn(); });
+    kids.push(b);
+  }
+  t.replaceChildren(...kids); t.className = "toast" + (kind ? " " + kind : ""); t.hidden = false;
+  clearTimeout(toastT); if (ms) toastT = setTimeout(() => { t.hidden = true; }, ms);
+}
+const fail = msg => toast(msg, 0, null, "err");
+const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+
+// ---- Writes (debounced so dragging doesn't flood Bluetooth) ----
+let tTimer = null;
+function setTarget(c, delay = 350) {
+  if (!S.connected) return;
+  S.target = snapC(c);
+  render();
+  clearTimeout(tTimer);
+  tTimer = setTimeout(async () => {
+    tTimer = null;
+    try {
+      await write("target", rawTarget(S.target));
+      // The official app rewrites the boost offset after every target change so the device keeps it
+      if (S.boost != null) await write("boost", rawBoost(S.boost));
+    } catch (e) { fail("Couldn't set the temperature: " + e.message + "."); }
+  }, delay);
+}
+let bTimer = null;
+function setBoost(c) {
+  if (!S.connected || S.boost == null) return;
+  S.boost = clamp(Math.round(c * 10) / 10, 0, LIM.BOOST_MAX);
+  render();
+  clearTimeout(bTimer);
+  bTimer = setTimeout(() => write("boost", rawBoost(S.boost)).catch(e => fail("Couldn't set boost: " + e.message + ".")), 350);
+}
+const nudge = dir => { if (S.target != null) { handSet(); setTarget(fromU(Math.round(toU(S.target)) + dir)); } };
+async function toggleHeater() {
+  const on = !(S.project & BIT.HEATER);
+  S.pending = on ? "on" : "off"; buzz(10); render();
+  try {
+    await write(on ? "heaterOn" : "heaterOff", enc16(0));
+    await new Promise(r => setTimeout(r, 600));
+    apply("project", await read("project"), "read");
+    if (on && !(S.project & BIT.HEATER)) fail("The Crafty didn't start heating. It may refuse while charging or asleep; press its button once and try again.");
+  } catch (e) { fail("Couldn't switch the heater: " + e.message + "."); }
+  S.pending = false; render();
+}
+async function findDevice() {
+  try { const v = await read("status2"); await write("status2", enc16((v ? u16(v) : S.status2) | BIT.FIND)); toast("Your Crafty should be buzzing now.", 3000); }
+  catch (e) { fail("Find didn't work: " + e.message + "."); }
+}
+let lTimer = null;
+function setLed(v) {
+  S.led = +v; render();
+  clearTimeout(lTimer);
+  lTimer = setTimeout(() => write("led", enc16(S.led)).catch(e => fail("Couldn't set brightness: " + e.message + ".")), 250);
+}
+
+// ---- Connection ----
+// Turns a browser or Bluetooth error into a plain-English reason and what to do. Returns null for "you cancelled".
+function explain(e) {
+  const n = e && e.name, m = (e && e.message) || "";
+  if (n === "NotFoundError" && /cancel/i.test(m)) return null;
+  if (n === "WrongDevice") return "That isn't a Crafty, or it's a different Storz & Bickel device. Tap Connect and pick the one named STORZ&BICKEL or Crafty.";
+  if (n === "Busy") return "Your Crafty is already being controlled from another tab of this page. Use that tab, or close it and tap Connect here.";
+  if (n === "TimeoutError") return "The Crafty didn't answer in time. Press its button once to wake it, keep it close, and tap Connect again.";
+  if (n === "NotFoundError" && /adapter|off|not available|unavailable/i.test(m)) return "Bluetooth looks switched off on this phone. Turn it on, then tap Connect.";
+  if (n === "NotFoundError") return "No Crafty showed up. Press its button once to wake it, keep it close, and make sure no other phone or the S&B web app is connected to it.";
+  if (n === "SecurityError" && /^(file|content):$/.test(location.protocol)) return "Chrome won't use Bluetooth on a page opened as a saved file. Open the page from an https:// web address instead.";
+  if (n === "SecurityError" || n === "NotAllowedError") return "Bluetooth isn't allowed for this page. In Chrome, tap the icon left of the address, allow Bluetooth (and Nearby devices if your phone asks), then try again.";
+  if (n === "NetworkError" || /gatt|connection|disconnected/i.test(m)) return "The Crafty stopped answering. Keep it close and switched on, make sure nothing else is connected to it, then tap Connect.";
+  return "Couldn't connect" + (m ? ": " + m : "") + ". Turn the Crafty off and on, then try again.";
+}
+// Why this browser has no Bluetooth at all, in plain English. Shown under the Connect button straight away.
+function noBluetoothReason() {
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/.test(ua)) return "iPhones and iPads don't allow Bluetooth in web pages. On iPhone, a browser app made for it, such as Bluefy, can open this page.";
+  if (/Firefox|FxiOS/.test(ua)) return "Firefox can't use Bluetooth, so it can't reach the Crafty. Open this page in Chrome instead.";
+  if (!window.isSecureContext) return "Chrome only allows Bluetooth on secure pages, and it isn't treating this one as secure. Open the saved file from your Files app with Chrome, or from an https:// web address.";
+  return "This browser can't use Bluetooth. Open the page in Chrome on Android (not Firefox, and not a viewer inside another app).";
+}
+
+// Only one tab may drive the Crafty, or two tabs would both log sessions and both step the climb.
+// Uses the browser's lock service where there is one; without it, a single tab is assumed.
+let releaseControl = null;
+function takeControl() {
+  if (releaseControl) return Promise.resolve(true);
+  if (!navigator.locks || !navigator.locks.request) return Promise.resolve(true);
+  return new Promise(res => {
+    navigator.locks.request("crafty-control", { ifAvailable: true }, lock => {
+      if (!lock) { res(false); return; }
+      res(true);
+      return new Promise(r => { releaseControl = () => { releaseControl = null; r(); }; });
+    }).catch(() => res(true));
+  });
+}
+const NOTIFY = ["current", "battery", "project", "status2", "power"];
+// connect({auto}) is used for the Connect button and, with auto, for getting the Crafty back after a dropout.
+// Returns true when connected. Auto attempts stay quiet; the reconnect loop reports the outcome.
+async function connect(opts = {}) {
+  const auto = !!opts.auto;
+  if (S.connecting) return false;
+  if (!auto) { $("toast").hidden = true; stopReconnect(); }
+  if (!navigator.bluetooth) { fail(noBluetoothReason()); return false; }
+  S.connecting = true; S.userDisc = false; render();
+  try {
+    if (!(await takeControl())) throw ERR("Busy");
+    if (!S.device) {
+      S.device = await navigator.bluetooth.requestDevice({
+        // Named filters catch Crafties with their usual names; the service filter catches any device that offers
+        // the Crafty's control service, whatever it's called, so new models or renamed units still show up.
+        filters: [{ namePrefix: "STORZ&BICKEL" }, { namePrefix: "Storz&Bickel" }, { namePrefix: "S&B" }, { namePrefix: "CRAFTY" }, { services: [SVC.s1] }],
+        optionalServices: [SVC.s1, SVC.s2, SVC.s3]
+      });
+      S.device.addEventListener("gattserverdisconnected", onDisconnect);
+    }
+    const server = await withTimeout(S.device.gatt.connect(), CFG.connectTimeout);
+    // Features are found by what the device actually offers, not by model name. Anything missing is skipped,
+    // and the controls that need it are switched off with a note instead of failing.
+    const svcs = {};
+    for (const k of Object.keys(SVC)) { try { svcs[k] = await gatt(() => server.getPrimaryService(SVC[k])); } catch (e) {} }
+    if (!svcs.s1) throw ERR("WrongDevice");
+    S.svcs = svcs; S.chars = {}; S.seen = {}; REC.probed = false; REC.diag = [];
+    for (const [k, [sv, uuid]] of Object.entries(CH)) {
+      if (!svcs[sv]) continue;
+      try { S.chars[k] = await gatt(() => svcs[sv].getCharacteristic(uuid)); } catch (e) {}
+    }
+    try { const v = await read("firmware"); if (v) S.fw = text(v); } catch (e) {}
+    try { const v = await read("serial"); if (v) S.serial = text(v).slice(0, 8); } catch (e) {}
+    await refresh(true);
+    for (const k of NOTIFY) {
+      const c = S.chars[k]; if (!c) continue;
+      c.addEventListener("characteristicvaluechanged", ev => { apply(k, ev.target.value, "notify"); render(); });
+      try { await gatt(() => c.startNotifications()); } catch (e) { /* polling covers it */ }
+    }
+    S.connected = true; S.everConnected = true; S.reconnecting = false;
+    fcConnected();
+    startPolling();
+    keepAwake();
+    if (REC.on) recProbe();
+    S.connecting = false; render();
+    return true;
+  } catch (e) {
+    if (e && e.name === "WrongDevice") S.device = null; // forget it so the next tap offers the device list again
+    try { S.device && S.device.gatt.connected && S.device.gatt.disconnect(); } catch (x) {}
+    if (!auto) {
+      if (F.sess && S.lostAt) endSession(S.lostAt, "connection lost"); // a held session that didn't come back
+      if (e && e.name !== "Busy") giveBackControl();
+      const why = explain(e); if (why) fail(why);
+    }
+    S.connecting = false; render();
+    return false;
+  }
+}
+function giveBackControl() { if (releaseControl) releaseControl(); }
+// Readings outside what a Crafty can report (a glitch, a half-received value) are ignored rather than shown,
+// so one bad packet can't fake a battery drop or a target change.
+const SANE = { current: [0, 260], target: [LIM.MIN - 1, LIM.MAX + 1], boost: [0, LIM.BOOST_MAX], battery: [0, 100], led: [0, 100] };
+const sane = (k, v) => !SANE[k] || (isFinite(v) && v >= SANE[k][0] && v <= SANE[k][1]);
+function apply(k, dv, src = "read") {
+  if (!dv || !dv.byteLength) return;
+  S.seen[k] = nowMs();
+  let v;
+  if (k === "current") { v = readCurrent(dv); if (sane(k, v)) S.current = v; }
+  else if (k === "target") { v = readTarget(dv); if (sane(k, v) && !S.dragging && !tTimer) S.target = v; }
+  else if (k === "boost") { v = u16(dv) / 10 / (S.devF ? 1.8 : 1); if (sane(k, v)) S.boost = v; }
+  else if (k === "battery") { v = u16(dv); if (sane(k, v)) { fcBattery(v); S.battery = v; } }
+  else if (k === "led") { v = u16(dv); if (sane(k, v)) S.led = v; }
+  else if (k === "project") { v = u16(dv); fcHeater(!!(v & BIT.HEATER)); S.project = v; }
+  else if (k === "status2") S.status2 = v = u16(dv);
+  else if (k === "power") S.power = v = u16(dv);
+  else if (k === "useHours") S.lifeH = v = u16(dv);
+  else if (k === "useMins") S.lifeM = v = u16(dv);
+  rec(src, k, hex(dv), v == null ? "" : +(+v).toFixed(2));
+}
+async function refresh(all) {
+  // Target first, so the °F/°C setting is known before the current temperature is read
+  const keys = all ? ["target", "current", "boost", "battery", "led", "project", "status2", "power", "useHours", "useMins"] : ["project", "status2", "battery", "power"];
+  const t = nowMs();
+  for (const k of keys) {
+    if (!all && t - (S.seen[k] || 0) < 4500) continue; // pushed to us recently, no need to ask
+    try { apply(k, await read(k), "read"); } catch (e) {}
+  }
+}
+let poll = null;
+function startPolling() {
+  clearInterval(poll);
+  poll = setInterval(async () => { if (!S.connected || S.dragging) return; await refresh(false); render(); }, 5000);
+}
+// A dropout you didn't ask for (out of range, phone slept, Crafty glitched) starts a quiet reconnect loop. The current
+// session and climb are held, and carry on if the Crafty comes back within CFG.resumeWindow.
+function onDisconnect() {
+  if (!S.connected) return; // already handled, or a failed connect attempt
+  S.connected = false; clearInterval(poll); clearInterval(fcTimer); flushOps();
+  S.lostAt = nowMs(); fcSave();
+  if (S.userDisc) { endSession(S.lostAt, ""); giveBackControl(); releaseWake(); }
+  else startReconnect();
+  render();
+}
+function endSession(t, note) { if (F.sess) logSession(t, note); F.heaterOn = false; }
+function startReconnect() {
+  stopReconnect(); S.reconnecting = true;
+  let i = 0;
+  const attempt = async () => {
+    S.retryT = null;
+    if (!S.reconnecting) return;
+    if (await connect({ auto: true })) { toast("Reconnected. Your session carried on.", 3000); return; }
+    if (!S.reconnecting) return;
+    if (i < CFG.retryDelays.length) { S.retryT = setTimeout(attempt, CFG.retryDelays[i++]); return; }
+    // Out of tries: close the session where the connection was lost and say what to do
+    S.reconnecting = false; endSession(S.lostAt, "connection lost"); giveBackControl(); releaseWake(); fcSave();
+    fail("Lost the Crafty and couldn't get it back. Make sure it's on and close by, then tap Reconnect.");
+    render();
+  };
+  S.retryT = setTimeout(attempt, CFG.retryDelays[i++]);
+}
+function stopReconnect() { clearTimeout(S.retryT); S.retryT = null; S.reconnecting = false; }
+function disconnect() {
+  S.userDisc = true; stopReconnect();
+  if (S.connected) { try { S.device && S.device.gatt.disconnect(); } catch (e) {} onDisconnect(); }
+  else { endSession(S.lostAt || nowMs(), ""); giveBackControl(); }
+  closeSheets(); render();
+}
+// "Pick another" when not connected: forget this Crafty so Connect shows the device list again
+function forgetDevice() { disconnect(); if (S.device) S.device.removeEventListener("gattserverdisconnected", onDisconnect); S.device = null; S.fw = ""; S.serial = ""; render(); }
+let wake = null;
+async function keepAwake() { try { if (navigator.wakeLock && !wake) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => { wake = null; }); } } catch (e) {} }
+function releaseWake() { try { wake && wake.release(); } catch (e) {} wake = null; }
+// Coming back to the page: keep the screen awake again, and if the phone dropped the Crafty while asleep, get it back.
+// Going away: save now rather than waiting for the next scheduled save.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") { fcSave(); return; }
+  if (S.connected) keepAwake();
+  else if (S.device && S.everConnected && !S.userDisc && !S.connecting && !S.reconnecting && releaseControl) startReconnect();
+  render();
+});
+window.addEventListener("pagehide", () => fcSave());
+
+// ---- Battery estimate ----
+// The Crafty only reports battery in whole percent, so the page predicts usage from a simple heat model
+// and learns one correction factor each time the battery drops a percent. Starting guesses come from
+// reviews of the Crafty+: about 40 minutes of heating per charge, about five bowls, ~80 s heat-up.
+const AMB = 22;                                  // room temperature, °C
+const heatScale = T => Math.max(0.2, (T - AMB) / (185 - AMB));
+// sessMin: your usual session length in minutes (heater on to heater off), learned from your sessions.
+const FC0 = { corr: 1, drops: 0, sessMin: 7, sessions: 0, cycles: 0, hlog: [] };
+// Learned numbers, each checked against a sensible range so damaged data can't produce silly estimates.
+// Older pages also learned pull sizes; those fields are dropped here and not saved again.
+function cleanModel(j) {
+  const m = { ...FC0, hlog: [] };
+  if (!j || typeof j !== "object") return m;
+  m.corr = num(j.corr, 1, 0.4, 2.5); m.drops = num(j.drops, 0, 0, 1e6); m.sessMin = num(j.sessMin, 7, 2, 20);
+  m.sessions = num(j.sessions, 0, 0, 1e6); m.cycles = num(j.cycles, 0, 0, 1e5);
+  if (Array.isArray(j.hlog)) m.hlog = j.hlog.filter(x => x && isFinite(x.d) && isFinite(x.c) && isFinite(x.n)).slice(-120);
+  return m;
+}
+let M = cleanModel(store.json(KEY.model));
+const fcSave = () => {
+  clearTimeout(saveT); saveT = null;
+  store.set(KEY.model, M);
+  store.set(KEY.bowl, { min: CL.min, mark: CL.mark, ts: nowMs(), sess: F.sess ? { ...F.sess } : null });
+};
+// Saving is batched: many changes in a row cost one write a couple of seconds later (and one when you leave the page)
+let saveT = null;
+const saveSoon = () => { if (!saveT) saveT = setTimeout(fcSave, 2000); };
+const holdRate = T => 2.3 * heatScale(T);       // % per minute holding temperature
+const heatUpCost = (T, from) => 3 * Math.max(0, T - from) / (185 - AMB); // % to heat up
+const sessionCost = T => M.corr * (heatUpCost(T, AMB) + M.sessMin * holdRate(T));
+
+// Live tracking
+const F = { last: 0, pred: 0, valid: false, prevBatt: null, heaterOn: false, sessStart: 0, atTemp: false, sess: null };
+// The climb clock: minutes at temperature since this heat-up (min), when the climb last stepped or started (mark),
+// and when the heater last went off (endedAt), so a quick reheat carries the climb on.
+const CL = { min: 0, mark: 0, endedAt: 0 };
+let savedSess = null;
+{
+  const b = store.json(KEY.bowl);
+  // What an older page saved here (pull-based, no minutes in it) starts the climb clock fresh
+  if (b && isFinite(b.ts) && isFinite(b.min) && nowMs() - b.ts < 15 * 60000) { CL.min = num(b.min, 0, 0, 600); CL.mark = num(b.mark, 0, 0, CL.min); CL.endedAt = b.ts; }
+  if (b && b.sess && isFinite(b.sess.start) && isFinite(b.ts)) savedSess = { ...b.sess, savedAt: b.ts };
+}
+let fcTimer = null;
+
+// ---- Session and climb clock ----
+// A session runs from heater on to heater off. The climb clock counts minutes at temperature; heating up again
+// within 3 minutes of turning the heater off carries it on, anything later starts a climb from the bottom.
+function fcConnected() {
+  const t = nowMs();
+  F.last = t; F.pred = 0; F.valid = false; F.prevBatt = S.battery;
+  const heating = !!(S.project & BIT.HEATER);
+  // Carry on a session held through a dropout or a page reload if the heater is still on and it wasn't long ago
+  if (F.sess && heating && t - S.lostAt < CFG.resumeWindow) { F.heaterOn = true; F.atTemp = false; }
+  else {
+    if (F.sess) logSession(S.lostAt || t, heating ? "connection lost" : "");
+    F.heaterOn = heating;
+    if (heating) { F.sessStart = t; F.sess = newSess(t); }
+  }
+  clearInterval(fcTimer);
+  fcTimer = setInterval(fcLoop, 1000);
+}
+async function fcLoop() {
+  if (!S.connected) return;
+  // The Crafty pushes temperature changes, but a steady temperature sends nothing, so read it every few seconds
+  // if nothing came in.
+  const stale = nowMs() - (S.seen.current || 0);
+  if (!S.dragging && stale > 4000) { try { apply("current", await read("current"), "read"); } catch (e) {} }
+  if (REC.on) recPollDiag();
+  fcTick();
+  render();
+}
+const charging = () => !!(S.power & 1);
+function fcTick() {
+  const t = nowMs(), dt = (t - F.last) / 60000; F.last = t;
+  if (dt <= 0) return;
+  if (dt > 10 / 60) { F.valid = false; F.pred = 0; return; } // the page was asleep: this stretch can't be measured
+  if (!F.heaterOn || S.target == null) return;
+  const goal = effTarget(), T = S.current;
+  if (F.sess) { F.sess.tMin = Math.min(F.sess.tMin, S.target); F.sess.tMax = Math.max(F.sess.tMax, S.target); }
+  if (!F.atTemp && T != null && T >= goal - 3) F.atTemp = true;
+  if (!F.atTemp) return; // heat-up is charged as one lump when the heater turns on
+  F.pred += holdRate(goal) * dt;
+  CL.min += dt;
+  climbCheck();
+  saveSoon();
+}
+function fcHeater(on) {
+  if (!S.connected || on === F.heaterOn) return; // while connecting, fcConnected sets the starting state
+  const t = nowMs();
+  F.heaterOn = on; F.atTemp = false;
+  if (on) {
+    F.sessStart = t;
+    F.sess = newSess(t);
+    F.pred += heatUpCost(effTarget(), S.current == null ? AMB : S.current);
+    F.last = t;
+    if (!(CL.endedAt && t - CL.endedAt < 3 * 60000)) freshClimb();
+    CL.endedAt = 0;
+  } else {
+    const mins = (t - F.sessStart) / 60000;
+    if (F.sessStart && mins >= 1.5) {
+      M.sessMin = clamp(M.sessMin * 0.7 + mins * 0.3, 2, 20);
+      M.sessions++;
+    }
+    logSession(t, "");
+    CL.endedAt = t;
+    fcSave();
+  }
+}
+function freshClimb() {
+  CL.min = 0; CL.mark = 0; CL.endedAt = 0;
+  const pr = activeProfile();
+  if (pr.mode === "climb" && S.connected) setTarget(TP ? terpOf(TP).c : startOf(pr), 0); // a fresh climb starts from the bottom
+}
+// ---- Session history (kept on this phone) ----
+const cleanHist = h => Array.isArray(h) ? h.filter(x => x && isFinite(x.start) && isFinite(x.mins)).map(x => ({
+  start: x.start, mins: num(x.mins, 0, 0, 1e4), tMin: num(x.tMin, 0, 0, 260), tMax: num(x.tMax, 0, 0, 260),
+  used: x.used == null ? null : num(x.used, null, 0, 100),
+  profile: typeof x.profile === "string" ? x.profile.slice(0, 60) : "", note: typeof x.note === "string" ? x.note.slice(0, 40) : "" })).slice(0, 300) : [];
+const rawHist = store.json(KEY.hist);
+let H = cleanHist(rawHist);
+// If storage fills up, the oldest half of the history makes room
+const saveHist = () => store.set(KEY.hist, H, () => { if (H.length < 20) return false; H.length = Math.floor(H.length / 2); return true; });
+// Sessions saved by older pages carry pull counts; save the history once without them
+if (Array.isArray(rawHist) && rawHist.some(x => x && ("hits" in x || "pulls" in x || "best" in x)) && store.ok && !store.readOnly) saveHist();
+const newSess = t => ({ start: t, batt: S.battery, tMin: S.target ?? 0, tMax: S.target ?? 0, profile: activeProfile().name, terp: terpOf(TP)?.name || "" });
+function logSession(t, note, x = F.sess) {
+  if (x === F.sess) F.sess = null;
+  if (!x) return;
+  const mins = (t - x.start) / 60000;
+  if (mins < 1) return;
+  H.unshift({ start: x.start, mins: +mins.toFixed(1), tMin: +x.tMin.toFixed(1), tMax: +x.tMax.toFixed(1),
+              used: x.batt != null && S.battery != null ? Math.max(0, x.batt - S.battery) : null,
+              profile: x.profile + (x.terp ? " · " + x.terp : ""), note });
+  H.sort((a, b) => b.start - a.start); // a session recovered from a reload can be older than one already logged
+  if (H.length > 300) H.length = 300;
+  saveHist();
+}
+// A session saved before the page was closed or reloaded: resume it on reconnect if it's recent, otherwise log it now
+if (savedSess) {
+  if (nowMs() - savedSess.savedAt < CFG.resumeWindow) { F.sess = savedSess; F.sessStart = savedSess.start; S.lostAt = savedSess.savedAt; }
+  else logSession(savedSess.savedAt, "page closed", savedSess);
+}
+function renderHistory() {
+  const life = [];
+  const add = (label, val) => { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = val; d.append(b, label); life.push(d); };
+  if (S.lifeH != null) add("Heater time on this Crafty", `${S.lifeH} h${S.lifeM != null ? " " + S.lifeM + " min" : ""}`);
+  else add("Heater time on this Crafty", S.connected ? "Not reported" : "Connect to read");
+  const totMin = H.reduce((a, x) => a + x.mins, 0);
+  add("Sessions logged here", `${H.length} · ${totMin >= 60 ? (totMin / 60).toFixed(1) + " h" : Math.round(totMin) + " min"}`);
+  if (S.lifeH != null) add("Sessions, all time (est.)", "~" + Math.round((S.lifeH * 60 + (S.lifeM || 0)) / Math.max(2, M.sessMin)));
+  $("life").replaceChildren(...life);
+  const df = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  $("histList").replaceChildren(...(H.length ? H.slice(0, 100).map(x => {
+    const r = document.createElement("div"); r.className = "hrow";
+    const b = document.createElement("b"); b.textContent = `${df.format(new Date(x.start))} · ${Math.round(x.mins)} min`;
+    const temps = Math.round(toU(x.tMin)) === Math.round(toU(x.tMax)) ? `${fmt(x.tMin)}°` : `${fmt(x.tMin)}° to ${fmt(x.tMax)}°`;
+    const d = document.createElement("div");
+    d.textContent = [temps, x.used != null ? `${x.used}% battery` : "", x.profile, x.note].filter(Boolean).join(" · ");
+    r.append(b, d); return r;
+  }) : [Object.assign(document.createElement("div"), { className: "note", textContent: "Sessions show up here after you heat up for at least a minute." })]));
+}
+function fcBattery(b) {
+  const prev = F.prevBatt; F.prevBatt = b;
+  if (prev == null) return;
+  if (b > prev) M.cycles += (b - prev) / 100; // count charge going in, 100% = one cycle
+  if (b > prev || charging()) { F.valid = false; F.pred = 0; return; }
+  if (b === prev) return;
+  // The first drop only tells us where the percent boundary is; measure from there
+  if (F.valid && F.pred > 0.15) {
+    const ratio = clamp((prev - b) / F.pred, 0.3, 3);
+    M.corr = clamp(M.corr * 0.85 + ratio * 0.15, 0.4, 2.5);
+    M.drops += prev - b;
+    // Once a day, log how much the battery actually drains against the model; a rising ratio means less capacity
+    const day = Math.floor(nowMs() / 864e5), lastLog = M.hlog[M.hlog.length - 1];
+    if (!lastLog || lastLog.d !== day) M.hlog.push({ d: day, c: +M.corr.toFixed(3), n: M.drops });
+    else { lastLog.c = +M.corr.toFixed(3); lastLog.n = M.drops; }
+    if (M.hlog.length > 120) M.hlog.shift();
+    saveSoon();
+  }
+  F.valid = true; F.pred = 0;
+}
+function renderForecast() {
+  const on = S.connected, T = S.target == null ? null : effTarget();
+  const conf = $("fcConf");
+  if (!on || S.battery == null || T == null) {
+    put($("fcMain"), "text", "--");
+    put($("fcSub"), "text", !on ? (S.reconnecting ? "Reconnecting…" : "Connect to estimate") : !S.chars.battery ? "Not reported by this Crafty" : "Reading battery…");
+    put(conf, "hidden", true);
+  } else if (charging()) {
+    put($("fcMain"), "text", S.battery + "%"); put($("fcSub"), "text", "Charging"); put(conf, "hidden", true);
+  } else {
+    const perMin = M.corr * holdRate(T);
+    const mins = Math.max(0, Math.floor(S.battery / perMin));
+    const bowls = S.battery / sessionCost(T);
+    const key = mins + "|" + fmt(T);
+    if (memo.get($("fcMain"))?.k !== key) {
+      $("fcMain").replaceChildren(document.createTextNode("~" + mins + " min"), Object.assign(document.createElement("small"), { textContent: "at " + fmt(T) + "°" }));
+      memo.set($("fcMain"), { k: key });
+    }
+    put($("fcSub"), "text", bowls < 1 ? "Less than a full bowl left" : "About " + (bowls < 2 ? bowls.toFixed(1) : Math.floor(bowls)) + " bowls left");
+    // Starts from review figures; labelled until it has learned from about 20 real percent drops on this Crafty
+    put(conf, "hidden", M.drops >= 20); put(conf, "text", "estimate");
+  }
+}
+function batteryHealth() {
+  // Needs at least two weeks and 60 measured percent. Baseline = the first week's average; recent = the last week's.
+  const L = M.hlog; if (L.length < 2) return null;
+  const span = L[L.length - 1].d - L[0].d;
+  if (span < 14 || M.drops < 60) return { learning: true, span, drops: M.drops };
+  const first = L.filter(x => x.d - L[0].d < 7), last = L.filter(x => L[L.length - 1].d - x.d < 7);
+  const avg = a => a.reduce((s, x) => s + x.c, 0) / a.length;
+  return { pct: clamp(Math.round(100 * avg(first) / avg(last)), 40, 100) };
+}
+// ---- Terpenes ----
+// Published boiling points (pure compound, sea-level pressure): Leafly "Target terpenes: temperature matters"
+// and extraktLAB's terpene chart. Where they differ by a degree or two, the midpoint is used.
+// Caryophyllene: charts that say 130 °C quote it at reduced pressure; at normal pressure it boils far above
+// the Crafty's 210 °C limit, so its pick is the device's top temp.
+const TERPS = [
+  { id: "pinene", name: "Pinene", c: 156, note: "Pine, sharp, fresh" },
+  { id: "myrcene", name: "Myrcene", c: 169, note: "Earthy, musky, fruity" },
+  { id: "limonene", name: "Limonene", c: 177, note: "Citrus" },
+  { id: "linalool", name: "Linalool", c: 198, note: "Floral, lavender" },
+  { id: "caryo", name: "Caryophyllene", c: 210, note: "Pepper, spice. Boils above the Crafty's top temp, so this is the top setting" }
+];
+const terpOf = id => TERPS.find(t => t.id === id) || null;
+let TP = null; // the terpene picked for this session, cleared when you set the temp by hand
+const startOf = pr => { const t = terpOf(pr.terp); return t ? clamp(t.c, LIM.MIN, LIM.MAX) : pr.base; };
+function pickTerp(id) {
+  const t = terpOf(id);
+  TP = t ? t.id : null; CL.mark = CL.min;
+  if (t && F.sess) F.sess.terp = t.name;
+  if (t && S.connected) setTarget(clamp(t.c, LIM.MIN, LIM.MAX), 0);
+  renderTerps(); render();
+  if (t) { closeSheets(); toast(`${t.name}: ${fmt(t.c)}°${S.unit}. ${t.note}.`, 3500); }
+}
+function renderTerps() {
+  $("terps").replaceChildren(...[{ id: null, name: "Off" }, ...TERPS].map(t => {
+    const b = document.createElement("button");
+    b.textContent = t.id ? `${t.name} ${fmt(t.c)}°` : "Off";
+    b.className = (t.id || null) === TP ? "on" : "";
+    b.addEventListener("click", () => pickTerp(t.id));
+    return b;
+  }));
+}
+// You set the temperature yourself: the terpene pick no longer applies, and a climb carries on from your temp
+const handSet = () => { if (TP) { TP = null; renderTerps(); } CL.mark = CL.min; };
+
+// ---- Profiles and auto-climb ----
+// Temperatures are stored in °C. A climb steps up by "step" each time another "mins" minutes at temperature pass.
+const fromF = f => (f - 32) * 5 / 9;
+const PROF0 = {
+  active: "default",
+  list: [
+    { id: "default", name: "Default", mode: "steady", base: 185, step: 5.5, mins: 2, max: 205 },
+    { id: "climb", name: "Slow climb", mode: "climb", base: fromF(360), step: 50 / 9, mins: 2, max: fromF(400), light: "heat" }
+  ]
+};
+// Each saved profile is checked field by field; a bad field gets a safe value instead of breaking the list.
+// Default always exists and the active profile always points at a real one.
+// Older pages stepped every N pulls, then every N % of the bowl. Pulls become the same share of a 12-pull bowl,
+// and a share of the bowl becomes minutes of an ~8-minute session (20% is about 2 minutes).
+function cleanProfiles(j) {
+  const out = JSON.parse(JSON.stringify(PROF0));
+  if (!j || !Array.isArray(j.list)) return out;
+  const seen = new Set();
+  const list = j.list.filter(p => p && typeof p.id === "string" && !seen.has(p.id) && seen.add(p.id)).map(p => {
+    const base = num(p.base, 185, LIM.MIN, LIM.MAX);
+    const every = num(p.every, isFinite(p.thr) ? Math.round(num(p.thr, 3, 0.5, 30) / 12 * 20) * 5 : 20, 5, 50);
+    const mins = Math.round(num(p.mins, Math.max(1, Math.round(every * 8 / 100)), 1, 15));
+    return { id: p.id, name: (typeof p.name === "string" && p.name.trim().slice(0, 24)) || "My profile", mode: p.mode === "climb" ? "climb" : "steady",
+             base, max: Math.max(base, num(p.max, LIM.MAX, LIM.MIN, LIM.MAX)), step: num(p.step, 5.5, 1, 30), mins,
+             light: typeof p.light === "string" ? p.light : "", terp: typeof p.terp === "string" ? p.terp : "" };
+  });
+  if (!list.some(p => p.id === "default")) list.unshift(out.list[0]);
+  return { active: list.some(p => p.id === j.active) ? j.active : "default", list };
+}
+let P = cleanProfiles(store.json(KEY.prof));
+const saveProfiles = () => store.set(KEY.prof, P);
+const activeProfile = () => P.list.find(p => p.id === P.active) || P.list[0];
+
+// Steps up once for every "mins" minutes at temperature since the last step. Never while you drag.
+function climbCheck() {
+  const pr = activeProfile();
+  if (pr.mode !== "climb" || !S.connected || S.dragging || S.target == null) return;
+  const top = clamp(pr.max, LIM.MIN, LIM.MAX);
+  if (S.target >= top - 0.4) return;
+  const n = Math.floor((CL.min - CL.mark) / pr.mins + 1e-9);
+  if (n < 1) return;
+  CL.mark += n * pr.mins;
+  setTarget(Math.min(top, S.target + n * pr.step), 0);
+  const m = Math.round(CL.min);
+  toast(`Stepping up to ${fmt(S.target)}° after ${m} min at temperature`, 2800);
+  buzz([8, 60, 8]);
+}
+function terpText() {
+  const t = terpOf(TP);
+  return t && S.connected ? `${t.name} · ${t.note.split(".")[0].split(",")[0]}` : "";
+}
+function climbText() {
+  const pr = activeProfile();
+  if (pr.mode !== "climb" || !S.connected || S.target == null) return "";
+  if (S.target >= clamp(pr.max, LIM.MIN, LIM.MAX) - 0.4) return "Climb: at top temp";
+  const next = Math.min(clamp(pr.max, LIM.MIN, LIM.MAX), S.target + pr.step);
+  return `Next ${fmt(next)}° in ${Math.max(1, Math.ceil(CL.mark + pr.mins - CL.min - 1e-9))} min`;
+}
+function renderClimb() {
+  const pr = activeProfile(), show = pr.mode === "climb" && S.connected && S.target != null;
+  put($("climbBg"), "@opacity", show ? "1" : "0");
+  put($("climbArc"), "@opacity", show ? "0.9" : "0");
+  put($("climbArc"), "strokeDashoffset", String(CLIMBLEN * (1 - clamp((CL.min - CL.mark) / pr.mins, 0, 1))));
+  put($("profName"), "text", pr.name);
+  const t = terpOf(TP);
+  put($("profSub"), "text", t ? t.name : pr.mode === "climb" ? `Climb to ${fmt(pr.max)}°` : `Steady ${fmt(startOf(pr))}°`);
+  put($("profBtn"), "class", "qbtn prof" + (pr.mode === "climb" ? " climb" : ""));
+}
+function useProfile(id) {
+  P.active = id; saveProfiles();
+  const pr = activeProfile();
+  TP = pr.terp && terpOf(pr.terp) ? pr.terp : null; renderTerps();
+  if (S.connected) setTarget(startOf(pr), 0);
+  CL.mark = CL.min;
+  closeSheets(); render();
+}
+
+// Profile sheet
+let editing = null, editMode = "steady";
+const profDesc = p => {
+  const t = terpOf(p.terp), from = t ? `${t.name} (${fmt(t.c)}°)` : `${fmt(p.base)}°`;
+  return p.mode === "climb" ? `Climb ${from} to ${fmt(p.max)}°, +${Math.round(dU(p.step))}° every ${p.mins} min` : `Steady at ${from}`;
+};
+function renderProfList() {
+  $("profList").replaceChildren(...P.list.map(p => {
+    const row = document.createElement("div"); row.className = "prow" + (p.id === P.active ? " on" : "");
+    const pick = document.createElement("button"); pick.className = "pick";
+    const dotEl = document.createElement("i"), txt = document.createElement("span");
+    const b = document.createElement("b"); b.textContent = p.name;
+    const sm = document.createElement("small"); sm.textContent = profDesc(p);
+    txt.append(b, sm); pick.append(dotEl, txt); pick.addEventListener("click", () => useProfile(p.id));
+    const ed = document.createElement("button"); ed.className = "btn"; ed.textContent = "Edit";
+    ed.addEventListener("click", () => editProfile(p.id));
+    row.append(pick, ed); return row;
+  }));
+}
+const showProfList = () => { $("profListView").hidden = false; $("profEditView").hidden = true; $("profTitle").textContent = "Profiles"; };
+function openProf() { renderTerps(); renderProfList(); showProfList(); showSheet("prof"); }
+function setEditMode(m) {
+  editMode = m;
+  $("pfSteady").className = m === "steady" ? "on" : ""; $("pfClimb").className = m === "climb" ? "on" : "";
+  for (const el of document.querySelectorAll(".climbOnly")) el.hidden = m !== "climb";
+  climbHint();
+}
+function editProfile(id) {
+  const p = id ? P.list.find(x => x.id === id) : { id: null, name: "", mode: "climb", base: fromF(360), step: 50 / 9, mins: 2, max: fromF(400) };
+  if (!p) { renderProfList(); return; }
+  editing = p.id;
+  for (const el of document.querySelectorAll(".pfU")) el.textContent = "(°" + S.unit + ")";
+  $("pfName").value = p.name;
+  $("pfBase").value = Math.round(toU(p.base));
+  $("pfMax").value = Math.round(toU(p.max));
+  $("pfStep").value = Math.round(dU(p.step));
+  $("pfMins").value = p.mins;
+  $("pfLight").value = p.light || "";
+  $("pfTerp").value = terpOf(p.terp) ? p.terp : ""; syncTerpField();
+  setEditMode(p.mode);
+  $("pfDel").hidden = !p.id || p.id === "default";
+  $("profTitle").textContent = p.id ? "Edit profile" : "New profile";
+  $("profListView").hidden = true; $("profEditView").hidden = false;
+}
+// Reads the form. Returns null (and says which) when a number is missing.
+function readForm() {
+  const n = id => parseFloat($(id).value);
+  const terp = terpOf($("pfTerp").value) ? $("pfTerp").value : "";
+  const base = terp ? clamp(terpOf(terp).c, LIM.MIN, LIM.MAX) : clamp(fromU(n("pfBase")), LIM.MIN, LIM.MAX);
+  let max = clamp(fromU(n("pfMax")), LIM.MIN, LIM.MAX);
+  const step = clamp(S.unit === "F" ? n("pfStep") * 5 / 9 : n("pfStep"), 1, 30);
+  const mins = clamp(Math.round(n("pfMins")), 1, 15);
+  if ([base, max, step, mins].some(v => !isFinite(v))) return null;
+  if (max < base) max = base;
+  return { base, max, step, mins, terp };
+}
+// Tells you, as you type, where the climb will end up
+function climbHint() {
+  const f = editMode === "climb" && readForm();
+  if (!f) { $("pfHint").textContent = editMode === "climb" ? "Fill in every number to see where this climb ends up." : ""; return; }
+  const steps = Math.ceil((f.max - f.base) / f.step - 1e-6), reach = steps * f.mins;
+  // Once a few sessions are logged, say when the climb runs past your usual session
+  const usual = M.sessions >= 3 ? Math.round(M.sessMin) : 0;
+  $("pfHint").textContent = steps <= 0 ? "Top temp is the start temp, so this won't climb."
+    : `Reaches ${fmt(f.max)}° after about ${reach} min at temperature.` + (usual && reach > usual ? ` Your sessions usually last about ${usual} min, so step more often or by more to get there.` : "");
+}
+function saveEdit() {
+  const f = readForm();
+  if (!f) { toast("Fill in every number first.", 2500); return; }
+  const name = ($("pfName").value || "").trim().slice(0, 24) || (editMode === "climb" ? "My climb" : "My profile");
+  const data = { name, mode: editMode, ...f, light: $("pfLight").value || "" };
+  const existing = editing && P.list.find(x => x.id === editing);
+  if (existing) Object.assign(existing, data);
+  else { const id = "p" + nowMs().toString(36); P.list.push({ id, ...data }); editing = id; } // new, or deleted in another tab meanwhile
+  saveProfiles();
+  if (editing === P.active) { TP = f.terp || null; renderTerps(); if (S.connected) setTarget(f.base, 0); CL.mark = CL.min; }
+  renderProfList(); showProfList(); render();
+}
+function deleteEdit() {
+  if (!editing || editing === "default") return;
+  const idx = P.list.findIndex(x => x.id === editing); if (idx < 0) return;
+  const gone = P.list[idx], wasActive = P.active === gone.id;
+  P.list.splice(idx, 1);
+  if (wasActive) P.active = "default";
+  saveProfiles(); renderProfList(); showProfList(); render();
+  toast(`Deleted ${gone.name}.`, 7000, { label: "Undo", fn: () => {
+    if (!P.list.some(x => x.id === gone.id)) P.list.splice(Math.min(idx, P.list.length), 0, gone);
+    if (wasActive) P.active = gone.id;
+    saveProfiles(); renderProfList(); render();
+  } });
+}
+function syncTerpField() {
+  const t = terpOf($("pfTerp").value);
+  $("pfBase").disabled = !!t;
+  if (t) $("pfBase").value = Math.round(toU(clamp(t.c, LIM.MIN, LIM.MAX)));
+  climbHint();
+}
+$("pfTerp").replaceChildren(...[["", "None, use start temp"], ...TERPS.map(t => [t.id, `${t.name} · ${t.note.split(".")[0]}`])].map(([v, l]) => Object.assign(document.createElement("option"), { value: v, textContent: l })));
+
+// ---- Lighting (on screen; the Crafty's own LED only takes a brightness over Bluetooth) ----
+const LIGHTS = [["classic", "Classic"], ["breathe", "Breathe"], ["heat", "Heat map"], ["cycle", "Color cycle"], ["calm", "Calm"], ["minimal", "Minimal"]];
+let lightMode = "breathe";
+{ const l = store.raw(KEY.light); if (LIGHTS.some(x => x[0] === l)) lightMode = l; }
+const currentLight = () => { const pl = activeProfile().light; return pl && LIGHTS.some(x => x[0] === pl) ? pl : lightMode; };
+function heatColor(c) {
+  // cold blue -> amber -> deep red across the Crafty's range, in 5 °C steps so it doesn't restyle on every reading
+  const f = c == null ? 0 : clamp(Math.round((c - 40) / 5) * 5 / 170, 0, 1);
+  return `hsl(${Math.round(205 - 200 * f)} 90% ${Math.round(58 - 6 * f)}%)`;
+}
+function applyLighting(on, heating, ready) {
+  const mode = currentLight();
+  put(document.body, "class", "l-" + mode + (on && heating ? " heating" : ""));
+  let glow = !on ? "transparent" : ready ? "var(--ready)" : heating ? "var(--heat)" : "var(--accent)";
+  if (mode === "heat" && on) glow = heatColor(S.current);
+  const root = document.documentElement;
+  put(root, "--glow", glow);
+  put(root, "--orb", !on ? "0" : mode === "calm" ? ".28" : heating ? ".75" : ".35");
+}
+function renderLights() {
+  $("lights").replaceChildren(...LIGHTS.map(([id, label]) => {
+    const b = document.createElement("button"); b.textContent = label; b.className = id === lightMode ? "on" : "";
+    b.addEventListener("click", () => { lightMode = id; store.set(KEY.light, id); renderLights(); render(); });
+    return b;
+  }));
+}
+$("pfLight").replaceChildren(...[["", "Use my lighting"], ...LIGHTS].map(([v, l]) => Object.assign(document.createElement("option"), { value: v, textContent: l })));
+
+// ---- Drag the ring to set the target ----
+const ring = $("ring");
+let lastFrac = 0, lastWhole = null, dragId = null;
+function fracAt(ev) {
+  const r = ring.getBoundingClientRect(), s = 300 / r.width;
+  const x = (ev.clientX - r.left) * s - CX, y = (ev.clientY - r.top) * s - CY;
+  const dist = Math.hypot(x, y);
+  const rel = (Math.atan2(y, x) * 180 / Math.PI - ARC0 + 720) % 360;
+  const f = rel <= SWEEP ? rel / SWEEP : S.dragging ? (lastFrac > 0.5 ? 1 : 0) : (rel < SWEEP + 45 ? 1 : 0); // in the open bottom: stick to the nearer end
+  return { f, dist };
+}
+function dragTo(ev) {
+  const { f } = fracAt(ev);
+  if (Math.abs(f - lastFrac) > 0.5) return; // don't let one move wrap straight from the top end to the bottom end
+  lastFrac = f;
+  const c = snapC(LIM.MIN + f * (LIM.MAX - LIM.MIN));
+  const whole = Math.round(toU(c));
+  if (whole !== lastWhole) { if (lastWhole != null && whole % 5 === 0) buzz(4); lastWhole = whole; }
+  setTarget(c, 450);
+}
+ring.addEventListener("pointerdown", ev => {
+  if (!S.connected || S.target == null || ev.target.closest("button")) return;
+  const { f, dist } = fracAt(ev);
+  if (dist < R - 48 || dist > R + 40) return; // only the ring band, not the numbers in the middle
+  ev.preventDefault();
+  dragId = ev.pointerId; try { ring.setPointerCapture(dragId); } catch (e) {}
+  S.dragging = true; ring.classList.add("drag");
+  lastFrac = f; lastWhole = null;
+  dragTo(ev);
+});
+ring.addEventListener("pointermove", ev => { if (S.dragging && ev.pointerId === dragId) { ev.preventDefault(); dragTo(ev); } });
+const endDrag = ev => {
+  if (!S.dragging || (ev && ev.pointerId !== dragId)) return;
+  S.dragging = false; dragId = null; ring.classList.remove("drag");
+  if (S.target != null) { handSet(); setTarget(S.target, 0); } // write right away on release
+};
+ring.addEventListener("pointerup", endDrag);
+ring.addEventListener("pointercancel", endDrag);
+ring.addEventListener("keydown", ev => {
+  const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[ev.key];
+  if (step) { ev.preventDefault(); nudge(step); }
+});
+
+// ---- Hold-to-repeat for − and + ----
+function holdRepeat(el, fn) {
+  let t = null, i = null;
+  const stop = () => { clearTimeout(t); clearInterval(i); t = i = null; };
+  el.addEventListener("pointerdown", e => { if (el.disabled) return; e.preventDefault(); e.stopPropagation(); fn(); buzz(4); t = setTimeout(() => { i = setInterval(fn, 110); }, 420); });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, stop));
+  el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
+}
+holdRepeat($("minus"), () => nudge(-1));
+holdRepeat($("plus"), () => nudge(1));
+holdRepeat($("bMinus"), () => setBoost((S.boost || 0) - (S.unit === "F" ? 5 / 9 : 1)));
+holdRepeat($("bPlus"), () => setBoost((S.boost || 0) + (S.unit === "F" ? 5 / 9 : 1)));
+
+// ---- Sheets ----
+// One sheet at a time. Close with Done, a tap outside, a swipe down, Escape, or the phone's Back button
+// (opening a sheet adds a history step, so Back closes the sheet instead of leaving the page and dropping the Crafty).
+const SHEETS = { settings: ["sheetWrap", "sheet"], hist: ["histWrap", "histSheet"], prof: ["profWrap", "profSheet"] };
+let openSh = null, histPushed = false;
+function hideSheet(name) { const [w, s] = SHEETS[name]; $(w).classList.remove("open"); $(s).inert = true; $(s).style.transform = ""; if (openSh === name) openSh = null; }
+function showSheet(name) {
+  if (openSh && openSh !== name) hideSheet(openSh);
+  openSh = name;
+  const [w, s] = SHEETS[name]; $(w).classList.add("open"); $(s).inert = false;
+  if (!histPushed) { try { history.pushState({ craftySheet: 1 }, ""); histPushed = true; } catch (e) {} }
+  render();
+}
+function closeSheets() {
+  if (openSh) hideSheet(openSh);
+  if (histPushed) { histPushed = false; try { history.back(); } catch (e) {} }
+}
+window.addEventListener("popstate", () => { if (histPushed) { histPushed = false; if (openSh) hideSheet(openSh); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openSh) closeSheets(); });
+for (const name of Object.keys(SHEETS)) {
+  const [w, s] = SHEETS[name], sheet = $(s), head = sheet.querySelector ? sheet.querySelector(".shead") : null;
+  $(s).inert = true;
+  $(w).querySelector && $(w).querySelector(".scrim").addEventListener("click", closeSheets);
+  if (!head) continue;
+  // Swipe the top of a sheet down to close it
+  let y0 = null, dy = 0;
+  head.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; y0 = e.clientY; dy = 0; sheet.classList.add("dragging"); try { head.setPointerCapture(e.pointerId); } catch (x) {} });
+  head.addEventListener("pointermove", e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = `translateY(${dy}px)`; });
+  const end = () => { if (y0 == null) return; y0 = null; sheet.classList.remove("dragging"); sheet.style.transform = ""; if (dy > 80) closeSheets(); };
+  head.addEventListener("pointerup", end); head.addEventListener("pointercancel", end);
+}
+function openHist() { renderHistory(); showSheet("hist"); }
+
+// ---- Settings sheet ----
+function drawSettings() {
+  const on = S.connected;
+  put($("bMinus"), "disabled", !on || S.boost == null);
+  put($("bPlus"), "disabled", !on || S.boost == null);
+  put($("boostVal"), "text", S.boost == null ? "--" : "+" + Math.round(dU(S.boost)) + "°");
+  put($("led"), "disabled", !on || !S.chars.led);
+  put($("findBtn"), "disabled", !on || !S.chars.status2);
+  if (S.led != null && document.activeElement !== $("led")) put($("led"), "value", String(S.led));
+  put($("ledVal"), "text", on && !S.chars.led ? "Not offered" : S.led == null ? "--" : S.led + "%");
+  // Disconnect while connected; while not, "Pick another" forgets this Crafty so Connect lists devices again
+  put($("discBtn"), "text", on || S.reconnecting ? "Disconnect" : "Pick another");
+  put($("discBtn"), "disabled", !on && !S.reconnecting && !S.device);
+  put($("fwTitle"), "text", on ? (S.device && S.device.name || "Crafty") : S.reconnecting ? "Reconnecting" : "Not connected");
+  put($("fwInfo"), "text", on ? [S.fw && "Software " + S.fw, S.serial && "serial " + S.serial, S.devF ? "set to °F" : ""].filter(Boolean).join(" · ") || "Connected" : "Connect to see details");
+  put($("unitF"), "class", S.unit === "F" ? "on" : ""); put($("unitC"), "class", S.unit === "C" ? "on" : "");
+  const note = !store.ok ? "This browser isn't letting the page save anything, so profiles, history and learning reset when you close it."
+    : store.readOnly ? "Your saved data came from a newer version of this page, so this copy only reads it. Open the newer page to make changes stick."
+    : store.full ? "Phone storage for this page is full, so new changes aren't being saved."
+    : store.damaged.length ? "Some saved data was damaged and has been reset. A copy was kept on this phone." : "";
+  put($("storeNote"), "text", note); put($("storeNote"), "hidden", !note);
+  const h = batteryHealth();
+  put($("healthVal"), "text", h && h.pct ? h.pct + "%" : "--");
+  put($("healthSub"), "text", h && h.pct ? `Compared with your first week · ${M.cycles.toFixed(1)} charges logged` : `Learning: needs about 2 weeks of use · ${M.cycles.toFixed(1)} charges logged`);
+}
+// ---- Recorder controls ----
+function setRec(on) {
+  if (on === REC.on) return;
+  REC.on = on;
+  if (on) {
+    if (!REC.rows.length) { REC.t0 = nowMs(); REC.dropped = 0; }
+    rec("info", "recording on", VERSION);
+    if (S.connected) recProbe();
+  }
+  render();
+}
+// Lists every characteristic the Crafty offers (with what each can do) and reads each one once.
+// Unknown ones that can push updates are subscribed to; the known diagnostic candidates are read every second.
+async function recProbe() {
+  if (!S.connected || REC.probed) return;
+  REC.probed = true; REC.probing = true; REC.diag = []; render();
+  for (const [sk, svc] of Object.entries(S.svcs)) {
+    let cs = [];
+    try { cs = await gatt(() => svc.getCharacteristics()); } catch (e) { rec("probe", sk, "", "", "couldn't list: " + e.message); continue; }
+    for (const c of cs) {
+      const id = shortId(c.uuid), p = c.properties || {};
+      const can = ["read", "write", "writeWithoutResponse", "notify", "indicate"].filter(x => p[x]).join("+");
+      let v = null;
+      if (p.read) { try { v = await gatt(() => c.readValue()); } catch (e) {} }
+      const priv = id === "52"; // the serial number stays out of the recording
+      rec("probe", id, v && !priv ? hex(v) : "", v && !priv ? u16(v) : "", `${sk} ${can}${priv ? " (serial, not recorded)" : ""}`);
+      const known = Object.values(CH).some(([, u]) => shortId(u) === id);
+      if (!known && (p.notify || p.indicate)) {
+        c.addEventListener("characteristicvaluechanged", ev => { const v = u16(ev.target.value); rec("notify", id, hex(ev.target.value), v); });
+        try { await gatt(() => c.startNotifications()); } catch (e) {}
+      }
+      if (p.read && DIAG.includes(id)) REC.diag.push(c);
+    }
+  }
+  REC.probing = false;
+  rec("info", "probe done", REC.diag.map(c => shortId(c.uuid)).join(" "), "", "read every 10 s");
+  render();
+}
+// While recording: the diagnostics every 10 s, one reading at a time and at low priority, so your taps go first.
+let diagBusy = false, diagSlowAt = 0;
+async function recPollDiag() {
+  if (diagBusy || !REC.diag.length || REC.probing || nowMs() - diagSlowAt < 10000) return;
+  diagBusy = true; diagSlowAt = nowMs();
+  try {
+    for (const c of REC.diag) {
+      if (!REC.on || !S.connected) break;
+      try { const v = await gatt(() => c.readValue(), { key: "d:" + c.uuid }); rec("poll", shortId(c.uuid), hex(v), u16(v)); } catch (e) {}
+    }
+  } finally { diagBusy = false; }
+}
+const mmss = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function drawRec() {
+  const n = REC.rows.length;
+  put($("recBtn"), "@aria-checked", String(REC.on));
+  put($("recRow"), "hidden", !REC.on && !n);
+  put($("recTitle"), "text", REC.on ? "Recording now" : "Recording stopped");
+  put($("recInfo"), "text", n ? `${n.toLocaleString()} readings · ${mmss(REC.rows[n - 1][0] - REC.t0)}${REC.dropped ? " · oldest trimmed" : ""} · kept until you close the page` : "Nothing yet");
+  put($("recShare"), "disabled", !n);
+}
+const csvCell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function recCsv() {
+  const head = [
+    `# Crafty Remote raw recording, page ${VERSION}`,
+    `# started ${new Date(REC.t0).toISOString()}, ${REC.rows.length} rows${REC.dropped ? `, ${REC.dropped} oldest rows trimmed` : ""}`,
+    `# device ${S.device && S.device.name || "?"}, firmware ${S.fw || "?"}, device unit ${S.devF ? "F" : "C"}, page unit ${S.unit}`,
+    `# browser ${navigator.userAgent || "?"}`,
+    "ms,time,kind,what,raw,value,note"
+  ];
+  return head.concat(REC.rows.map(r => [r[0] - REC.t0, new Date(r[0]).toISOString().slice(11, 23), r[1], r[2], r[3], r[4], r[5]].map(csvCell).join(","))).join("\n") + "\n";
+}
+// Hands a CSV to the phone's share sheet, or saves it to Downloads where there's no share sheet for files.
+// Resolves "shared", "saved", "cancelled" (you closed the share sheet) or "failed".
+async function shareCsv(name, csv, title, what) {
+  try {
+    const file = new File([csv], name, { type: "text/csv" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return "shared"; }
+  } catch (e) { if (e && e.name === "AbortError") return "cancelled"; }
+  // No share sheet for files here: save it to Downloads instead
+  try {
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast(`Saved to your Downloads as ${name}.`, 6000);
+    return "saved";
+  } catch (e) { fail(`Couldn't share or save the ${what}: ` + e.message + "."); return "failed"; }
+}
+const stamp = t => new Date(t).toISOString().slice(0, 16).replace(/[:T]/g, "-");
+async function shareRec() {
+  if (!REC.rows.length) return;
+  await shareCsv(`crafty-recording-${stamp(REC.t0)}.csv`, recCsv(), "Crafty recording", "recording");
+}
+function clearRec() {
+  const old = { rows: REC.rows, t0: REC.t0, dropped: REC.dropped };
+  REC.rows = []; REC.dropped = 0; REC.t0 = nowMs(); render();
+  toast("Recording cleared.", 7000, { label: "Undo", fn: () => { REC.rows = old.rows.concat(REC.rows); REC.t0 = old.t0; REC.dropped = old.dropped; render(); } });
+}
+// ---- Wiring ----
+$("gearBtn").addEventListener("click", () => { renderLights(); showSheet("settings"); });
+$("setDone").addEventListener("click", closeSheets);
+$("histBtn").addEventListener("click", openHist);
+$("histClose").addEventListener("click", closeSheets);
+$("profBtn").addEventListener("click", openProf);
+$("profDone").addEventListener("click", closeSheets);
+$("profNew").addEventListener("click", () => editProfile(null));
+$("pfSteady").addEventListener("click", () => setEditMode("steady"));
+$("pfClimb").addEventListener("click", () => setEditMode("climb"));
+$("pfSave").addEventListener("click", saveEdit);
+$("pfCancel").addEventListener("click", showProfList);
+$("pfDel").addEventListener("click", deleteEdit);
+$("pfTerp").addEventListener("change", syncTerpField);
+for (const id of ["pfBase", "pfMax", "pfStep", "pfMins"]) $(id).addEventListener("input", climbHint);
+$("mainBtn").addEventListener("click", () => S.connected ? toggleHeater() : S.connecting ? null : (stopReconnect(), connect()));
+$("toast").addEventListener("click", () => { $("toast").hidden = true; });
+$("findBtn").addEventListener("click", findDevice);
+$("discBtn").addEventListener("click", () => S.connected || S.reconnecting ? disconnect() : forgetDevice());
+$("led").addEventListener("input", e => setLed(e.target.value));
+const setUnit = u => { S.unit = u; store.set(KEY.unit, u); renderTerps(); render(); };
+$("unitF").addEventListener("click", () => setUnit("F"));
+$("unitC").addEventListener("click", () => setUnit("C"));
+$("recBtn").addEventListener("click", () => setRec(!REC.on));
+$("recShare").addEventListener("click", shareRec);
+$("recClear").addEventListener("click", clearRec);
+// Clearing and resetting can be undone from the toast for a few seconds
+$("histClear").addEventListener("click", () => {
+  if (!H.length) return;
+  const old = H; H = []; saveHist(); renderHistory();
+  toast(`Cleared ${old.length} session${old.length === 1 ? "" : "s"}.`, 7000, { label: "Undo", fn: () => { H = cleanHist([...H, ...old]); H.sort((a, b) => b.start - a.start); saveHist(); renderHistory(); } });
+});
+$("resetFc").addEventListener("click", () => {
+  const old = M; M = { ...FC0, hlog: [] }; fcSave(); render();
+  toast("Learning reset. Estimates are back to the starting figures.", 7000, { label: "Undo", fn: () => { M = old; fcSave(); render(); } });
+});
+// Another tab of this page saved something: pick it up here, so two open tabs never undo each other's changes.
+// (Only the tab connected to the Crafty writes the learned numbers, so those are only taken when this tab isn't connected.)
+window.addEventListener("storage", e => {
+  if (e.key === KEY.prof) { P = cleanProfiles(store.json(KEY.prof)); if ($("profEditView").hidden) renderProfList(); }
+  else if (e.key === KEY.hist) { H = cleanHist(store.json(KEY.hist)); renderHistory(); }
+  else if (e.key === KEY.light) { const l = e.newValue; if (LIGHTS.some(x => x[0] === l)) { lightMode = l; renderLights(); } }
+  else if (e.key === KEY.unit) { if (e.newValue === "C" || e.newValue === "F") S.unit = e.newValue; }
+  else if (e.key === KEY.model && !S.connected) M = cleanModel(store.json(KEY.model));
+  else return;
+  render();
+});
+document.addEventListener("touchmove", e => { if (!e.target.closest || !e.target.closest("input, .scroll")) e.preventDefault(); }, { passive: false });
+$("verTag").textContent = "v" + VERSION.split(" ").pop();
+$("verNote").textContent = `Page version ${VERSION}. Everything is kept on this phone; nothing is sent anywhere.`;
+if (store.damaged.length) toast("Some saved data was damaged and has been reset. A copy was kept on this phone.", 6000, null, "err");
+renderLights(); renderTerps();
+booted = true;
+render();
+</script>
+</body>
+</html>

@@ -8,9 +8,9 @@ function heatColor(c) {
   const f = c == null ? 0 : clamp(Math.round((c - 40) / 5) * 5 / 170, 0, 1);
   return `hsl(${Math.round(205 - 200 * f)} 90% ${Math.round(58 - 6 * f)}%)`;
 }
-function applyLighting(on, heating, ready, pulling) {
+function applyLighting(on, heating, ready) {
   const mode = currentLight();
-  put(document.body, "class", "l-" + mode + (on && heating ? " heating" : "") + (pulling ? " pulling" : "") + (LB.open ? " labon" : ""));
+  put(document.body, "class", "l-" + mode + (on && heating ? " heating" : ""));
   let glow = !on ? "transparent" : ready ? "var(--ready)" : heating ? "var(--heat)" : "var(--accent)";
   if (mode === "heat" && on) glow = heatColor(S.current);
   const root = document.documentElement;

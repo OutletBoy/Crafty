@@ -25,7 +25,6 @@ button:disabled{opacity:.35;cursor:default}
 .orb{position:fixed;left:50%;top:38%;width:120vmin;height:120vmin;margin:-60vmin 0 0 -60vmin;border-radius:50%;pointer-events:none;z-index:0;will-change:transform,opacity;
   background:radial-gradient(closest-side,color-mix(in srgb,var(--glow) 36%,transparent),color-mix(in srgb,var(--glow) 10%,transparent) 55%,transparent);
   opacity:var(--orb,.5);transition:opacity .6s}
-.pulling .orb{opacity:1}
 .l-breathe .orb{animation:breathe 7s ease-in-out infinite}
 .l-breathe.heating .orb{animation-duration:2.8s}
 .l-calm .orb{animation:breathe 11s ease-in-out infinite}
@@ -73,18 +72,16 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
 .ends{font-size:11px;fill:var(--muted);font-family:var(--font)}
 .climb-bg{fill:none;stroke:var(--surface-2);stroke-width:3;stroke-linecap:round}
 .climb-arc{fill:none;stroke:var(--heat-2);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .5s}
-.draw-arc{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset .2s,opacity .4s}
 
 .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding-bottom:7%}
 .state{font-size:clamp(11px,3.6cqmin,13px);font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);transition:color .3s}
-.state.heating{color:var(--heat)} .state.ready{color:var(--ready)} .state.pulling{color:var(--accent)}
+.state.heating{color:var(--heat)} .state.ready{color:var(--ready)}
 .now{font-weight:200;font-size:clamp(52px,27cqmin,112px);line-height:1;letter-spacing:-.03em;margin:.06em 0 .05em}
 .now sup{font-size:.3em;font-weight:500;vertical-align:1.15em;margin-left:3px;color:var(--muted);letter-spacing:0}
 .tgt{font-size:clamp(13px,4.6cqmin,17px);color:var(--muted)}
 .tgt b{font-weight:600;color:var(--fg);font-size:1.25em}
 .ring.drag .tgt b{color:var(--accent)}
 .eff{font-size:clamp(11px,3.6cqmin,13px);color:var(--heat-2);min-height:1.4em;margin-top:4px;max-width:70%}
-.eff.pull{color:var(--accent)}
 
 /* − and + sit in the open bottom of the ring */
 .nudge{position:absolute;left:0;right:0;bottom:1%;display:flex;justify-content:center;gap:26%;pointer-events:none}
@@ -92,18 +89,14 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
 .nudge button:active:not(:disabled){background:var(--surface-2)}
 
 /* Bowl and battery, side by side */
-.strip{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.strip{flex:none;display:grid;grid-template-columns:1fr;gap:8px}
 .tile{min-width:0;padding:10px 14px 12px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 .tile .k{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-height:24px}
 .tile .v{font-size:22px;font-weight:500;line-height:1.15;white-space:nowrap}
 .tile .v small{font-size:12px;font-weight:400;color:var(--muted);margin-left:4px}
 .tile .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:10px;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:6px;border:1px solid var(--line-2);color:var(--muted);text-transform:uppercase}
-.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:6px 0 4px}
-.bar i{display:block;height:100%;width:100%;border-radius:3px;background:linear-gradient(90deg,#7cf0b0,var(--heat-2) 60%,var(--heat));transform-origin:left;transform:scaleX(0);transition:transform .6s}
 /* Small visual button with a full 44px tap area */
-.tiny{position:relative;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:none;padding:3px 10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line-2);color:var(--fg)}
-.tiny::before{content:"";position:absolute;inset:-10px -6px}
 
 /* Profile + quick temps */
 .quick{flex:none;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px}
@@ -122,15 +115,12 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
 .main{flex:none;min-height:60px;border-radius:18px;font-size:17px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:10px}
 .mainrow{flex:none;display:flex;gap:8px}
 .mainrow .main{flex:1;min-width:0}
-.pullbtn{flex:none;min-width:92px;min-height:60px;border-radius:18px;background:var(--surface-2);border:1px solid var(--line-2);font-size:17px;font-weight:600;color:var(--fg)}
-.pullbtn:active{background:var(--accent);color:#04121f}
 .main.connect{background:var(--accent);color:#04121f}
 .main.on{background:linear-gradient(135deg,var(--heat-2),var(--heat));color:#1d0a03}
 .main.off{background:var(--surface-2);border:1px solid var(--line-2)}
 .main .spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hint{flex:none;margin:-4px 8px 0;text-align:center;font-size:12px;color:var(--muted)}
-.hintbtn{flex:none;align-self:center;min-height:var(--hit);margin:-10px 0 -6px;padding:0 14px;font-size:13px;font-weight:500;color:var(--accent);background:none;border:0}
 .btn[aria-disabled=true]{opacity:.4}
 /* Before the first connection the estimates have nothing to show, so they step aside */
 .app.offline .strip{display:none}
@@ -196,9 +186,6 @@ input[type=range]{width:100%;height:var(--hit);accent-color:var(--accent);margin
 .chips.two{grid-template-columns:1fr 1fr}
 .chips button{min-height:var(--hit);padding:4px 6px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.2}
 .chips button.on{border-color:var(--accent);color:var(--fg);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
-.trace{display:block;width:100%;height:96px;border-radius:10px;background:var(--surface)}
-.legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:6px}
-.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
 /* History */
 .life{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .life div{padding:10px 12px;border-radius:var(--r-sm);background:var(--surface-2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
@@ -224,7 +211,7 @@ input[type=range]{width:100%;height:var(--hit);accent-color:var(--accent);margin
 .btns{display:flex;gap:8px;grid-column:1/-1}
 .btns .btn{flex:1}
 
-@media (max-height:640px){ .tile .s{display:none} .hint,.hintbtn{display:none} .quick .qbtn{min-height:44px} .main,.pullbtn{min-height:54px} }
+@media (max-height:640px){ .tile .s{display:none} .hint{display:none} .quick .qbtn{min-height:44px} .main{min-height:54px} }
 /* Phone turned sideways: ring on the left, controls on the right, still one screen */
 @media (orientation:landscape) and (max-height:560px){
   .app{max-width:920px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);grid-template-rows:auto 1fr auto auto auto;column-gap:20px}
@@ -233,73 +220,7 @@ input[type=range]{width:100%;height:var(--hit);accent-color:var(--accent);margin
   .strip{grid-column:2;grid-row:2;align-self:end}
   .quick{grid-column:2;grid-row:3}
   .mainrow{grid-column:2;grid-row:4}
-  .hint,.hintbtn{grid-column:2;grid-row:5}
+  .hint{grid-column:2;grid-row:5}
   .sheet{max-height:94dvh}
-}
-/* Guided pull test: a big card over the controls, readable at arm's length */
-.guide{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);max-width:448px;margin:0 auto;z-index:11;
-  background:var(--surface);border:1px solid var(--line-2);border-radius:22px;padding:16px;box-shadow:0 -10px 40px rgba(0,0,0,.55);text-align:center;display:flex;flex-direction:column;gap:4px}
-.guide .gk{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.guide .gt{font-size:22px;font-weight:600}
-.guide .gc{font-size:64px;font-weight:200;line-height:1.05}
-.guide.go{border-color:var(--accent)} .guide.go .gc,.guide.go .gt{color:var(--accent)}
-.guide .gs{font-size:13px;color:var(--muted);min-height:1.3em;margin-bottom:8px}
-/* Pull labeling: a full-screen panel with three big hold buttons. Hold one for as long as the pull lasts.
-   It covers the whole page so nothing behind it can be tapped by mistake mid-pull. touch-action:none and no
-   callout or selection keep a long press from turning into a scroll, a menu or selected text. */
-.lab{position:fixed;inset:0;z-index:11;background:var(--bg);display:flex;flex-direction:column;gap:10px;max-width:480px;margin:0 auto;
-  padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 14px) max(16px,env(safe-area-inset-left,0px))}
-.lhead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:var(--hit)}
-.lhead h2{margin:0;font-size:20px;font-weight:600}
-.lhead small{display:block;font-size:12px;color:var(--muted)}
-.lhead>div:first-child{min-width:0}
-.lhead h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lhb{flex:none;display:flex;gap:8px}
-.lhb .btn{padding:0 12px}
-@media (max-width:380px){.lhead h2{font-size:18px}}
-.lask{position:fixed;inset:0;z-index:13;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6)}
-.laskc{width:100%;max-width:400px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line-2);border-radius:18px;padding:18px 16px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
-.laskc strong{font-size:17px;font-weight:600}
-.laskc small{font-size:14px;line-height:1.45;color:var(--muted)}
-.laskc .btns{margin-top:8px}
-.lstat{flex:none;min-height:36px;font-size:14px;line-height:1.35;color:var(--fg)}
-.lstat span{display:block}
-.lmsg{font-size:13px;color:var(--heat-2);min-height:1.35em}
-.lholds{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
-.hold{--c:var(--accent);flex:1 1 0;min-height:64px;border-radius:20px;background:var(--surface);border:2px solid var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-.hold b{font-size:28px;font-weight:600;color:var(--c);line-height:1.1}
-.hold small{font-size:13px;color:var(--muted)}
-.hold.med{--c:var(--heat-2)} .hold.hard{--c:var(--heat)}
-.hold.on{background:var(--c)} .hold.on b,.hold.on small{color:#0a0c0f}
-.hold:active:not(:disabled){transform:none}
-.hold.off{opacity:.4}
-.llist{flex:none;min-height:56px;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
-.llist div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.llist div:first-child{color:var(--fg)}
-.llist .ltemp{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:var(--hit);font-size:14px;overflow:visible}
-/* After each pull the buttons are covered until the Crafty settles, so the next pull doesn't run into this one */
-.lwait{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;text-align:center;
-  border-radius:20px;background:var(--surface);border:2px solid var(--line-2);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.lringw{position:relative;width:88px;height:88px;flex:none}
-.lringw svg{width:100%;height:100%;transform:rotate(-90deg)}
-.lringw circle{fill:none;stroke-width:6}
-.lr0{stroke:var(--line)}
-.lr1{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:175.93;transition:stroke-dashoffset .3s linear}
-.lwait.temp .lr1{animation:blink 1.6s ease-in-out infinite}
-.lringw b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600}
-.lwait strong{font-size:18px;font-weight:600}
-.lwait small{font-size:13px;color:var(--muted);max-width:30ch;min-height:2.7em}
-.lwait .btn{min-width:150px}
-.lfoot{flex:none;display:flex;gap:8px}
-.lfoot .btn{flex:1;min-width:0;padding:0 8px}
-/* While labeling, messages show at the top, so one can never land on a hold button */
-.labon .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 60px)}
-@media (orientation:landscape) and (max-height:560px){
-  .lab{max-width:920px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);grid-template-rows:auto auto 1fr auto;column-gap:20px;row-gap:8px}
-  .lhead{grid-column:1;grid-row:1} .lstat{grid-column:1;grid-row:2} .llist{grid-column:1;grid-row:3;align-self:start;min-height:0;max-height:100%;overflow:hidden} .lfoot{grid-column:1;grid-row:4}
-  .lholds{grid-column:2;grid-row:1/5;gap:8px}
-  .hold{min-height:56px}
-  .lringw{width:64px;height:64px} .lwait{padding:8px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}

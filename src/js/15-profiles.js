@@ -1,16 +1,17 @@
 // ---- Profiles and auto-climb ----
-// Temperatures are stored in °C. A climb steps up by "step" each time another "every" % of the bowl is used.
+// Temperatures are stored in °C. A climb steps up by "step" each time another "mins" minutes at temperature pass.
 const fromF = f => (f - 32) * 5 / 9;
 const PROF0 = {
   active: "default",
   list: [
-    { id: "default", name: "Default", mode: "steady", base: 185, step: 5.5, every: 20, max: 205 },
-    { id: "climb", name: "Slow climb", mode: "climb", base: fromF(360), step: 50 / 9, every: 20, max: fromF(400), light: "heat" }
+    { id: "default", name: "Default", mode: "steady", base: 185, step: 5.5, mins: 2, max: 205 },
+    { id: "climb", name: "Slow climb", mode: "climb", base: fromF(360), step: 50 / 9, mins: 2, max: fromF(400), light: "heat" }
   ]
 };
 // Each saved profile is checked field by field; a bad field gets a safe value instead of breaking the list.
 // Default always exists and the active profile always points at a real one.
-// Older pages stepped every N pulls; that becomes the same share of a 12-pull bowl.
+// Older pages stepped every N pulls, then every N % of the bowl. Pulls become the same share of a 12-pull bowl,
+// and a share of the bowl becomes minutes of an ~8-minute session (20% is about 2 minutes).
 function cleanProfiles(j) {
   const out = JSON.parse(JSON.stringify(PROF0));
   if (!j || !Array.isArray(j.list)) return out;
@@ -18,8 +19,9 @@ function cleanProfiles(j) {
   const list = j.list.filter(p => p && typeof p.id === "string" && !seen.has(p.id) && seen.add(p.id)).map(p => {
     const base = num(p.base, 185, LIM.MIN, LIM.MAX);
     const every = num(p.every, isFinite(p.thr) ? Math.round(num(p.thr, 3, 0.5, 30) / 12 * 20) * 5 : 20, 5, 50);
+    const mins = Math.round(num(p.mins, Math.max(1, Math.round(every * 8 / 100)), 1, 15));
     return { id: p.id, name: (typeof p.name === "string" && p.name.trim().slice(0, 24)) || "My profile", mode: p.mode === "climb" ? "climb" : "steady",
-             base, max: Math.max(base, num(p.max, LIM.MAX, LIM.MIN, LIM.MAX)), step: num(p.step, 5.5, 1, 30), every,
+             base, max: Math.max(base, num(p.max, LIM.MAX, LIM.MIN, LIM.MAX)), step: num(p.step, 5.5, 1, 30), mins,
              light: typeof p.light === "string" ? p.light : "", terp: typeof p.terp === "string" ? p.terp : "" };
   });
   if (!list.some(p => p.id === "default")) list.unshift(out.list[0]);
@@ -29,18 +31,18 @@ let P = cleanProfiles(store.json(KEY.prof));
 const saveProfiles = () => store.set(KEY.prof, P);
 const activeProfile = () => P.list.find(p => p.id === P.active) || P.list[0];
 
-// Steps up once for every "every" % of the bowl used since the last step. Never mid-pull, never while you drag.
+// Steps up once for every "mins" minutes at temperature since the last step. Never while you drag.
 function climbCheck() {
   const pr = activeProfile();
-  // Never during the guided test or labeling: they need one steady temperature, and nothing should write to the Crafty meanwhile
-  if (pr.mode !== "climb" || !S.connected || S.dragging || S.target == null || PD.inHit || GT.on || tempLocked()) return;
+  if (pr.mode !== "climb" || !S.connected || S.dragging || S.target == null) return;
   const top = clamp(pr.max, LIM.MIN, LIM.MAX);
   if (S.target >= top - 0.4) return;
-  const pct = bowlPct(), n = Math.floor((pct - CL.mark) / pr.every + 1e-9);
+  const n = Math.floor((CL.min - CL.mark) / pr.mins + 1e-9);
   if (n < 1) return;
-  CL.mark += n * pr.every;
+  CL.mark += n * pr.mins;
   setTarget(Math.min(top, S.target + n * pr.step), 0);
-  toast(`Bowl about ${Math.round(pct)}% used. Stepping up to ${fmt(S.target)}°`, 2800);
+  const m = Math.round(CL.min);
+  toast(`Stepping up to ${fmt(S.target)}° after ${m} min at temperature`, 2800);
   buzz([8, 60, 8]);
 }
 function terpText() {
@@ -52,13 +54,13 @@ function climbText() {
   if (pr.mode !== "climb" || !S.connected || S.target == null) return "";
   if (S.target >= clamp(pr.max, LIM.MIN, LIM.MAX) - 0.4) return "Climb: at top temp";
   const next = Math.min(clamp(pr.max, LIM.MIN, LIM.MAX), S.target + pr.step);
-  return `Next ${fmt(next)}° at ${Math.min(100, Math.round(CL.mark + pr.every))}% of the bowl`;
+  return `Next ${fmt(next)}° in ${Math.max(1, Math.ceil(CL.mark + pr.mins - CL.min - 1e-9))} min`;
 }
 function renderClimb() {
   const pr = activeProfile(), show = pr.mode === "climb" && S.connected && S.target != null;
   put($("climbBg"), "@opacity", show ? "1" : "0");
   put($("climbArc"), "@opacity", show ? "0.9" : "0");
-  put($("climbArc"), "strokeDashoffset", String(CLIMBLEN * (1 - clamp((bowlPct() - CL.mark) / pr.every, 0, 1))));
+  put($("climbArc"), "strokeDashoffset", String(CLIMBLEN * (1 - clamp((CL.min - CL.mark) / pr.mins, 0, 1))));
   put($("profName"), "text", pr.name);
   const t = terpOf(TP);
   put($("profSub"), "text", t ? t.name : pr.mode === "climb" ? `Climb to ${fmt(pr.max)}°` : `Steady ${fmt(startOf(pr))}°`);
@@ -69,7 +71,7 @@ function useProfile(id) {
   const pr = activeProfile();
   TP = pr.terp && terpOf(pr.terp) ? pr.terp : null; renderTerps();
   if (S.connected) setTarget(startOf(pr), 0);
-  CL.mark = bowlPct();
+  CL.mark = CL.min;
   closeSheets(); render();
 }
 
@@ -77,7 +79,7 @@ function useProfile(id) {
 let editing = null, editMode = "steady";
 const profDesc = p => {
   const t = terpOf(p.terp), from = t ? `${t.name} (${fmt(t.c)}°)` : `${fmt(p.base)}°`;
-  return p.mode === "climb" ? `Climb ${from} to ${fmt(p.max)}°, +${Math.round(dU(p.step))}° every ${p.every}% of the bowl` : `Steady at ${from}`;
+  return p.mode === "climb" ? `Climb ${from} to ${fmt(p.max)}°, +${Math.round(dU(p.step))}° every ${p.mins} min` : `Steady at ${from}`;
 };
 function renderProfList() {
   $("profList").replaceChildren(...P.list.map(p => {
@@ -101,7 +103,7 @@ function setEditMode(m) {
   climbHint();
 }
 function editProfile(id) {
-  const p = id ? P.list.find(x => x.id === id) : { id: null, name: "", mode: "climb", base: fromF(360), step: 50 / 9, every: 20, max: fromF(400) };
+  const p = id ? P.list.find(x => x.id === id) : { id: null, name: "", mode: "climb", base: fromF(360), step: 50 / 9, mins: 2, max: fromF(400) };
   if (!p) { renderProfList(); return; }
   editing = p.id;
   for (const el of document.querySelectorAll(".pfU")) el.textContent = "(°" + S.unit + ")";
@@ -109,7 +111,7 @@ function editProfile(id) {
   $("pfBase").value = Math.round(toU(p.base));
   $("pfMax").value = Math.round(toU(p.max));
   $("pfStep").value = Math.round(dU(p.step));
-  $("pfEvery").value = p.every;
+  $("pfMins").value = p.mins;
   $("pfLight").value = p.light || "";
   $("pfTerp").value = terpOf(p.terp) ? p.terp : ""; syncTerpField();
   setEditMode(p.mode);
@@ -124,19 +126,20 @@ function readForm() {
   const base = terp ? clamp(terpOf(terp).c, LIM.MIN, LIM.MAX) : clamp(fromU(n("pfBase")), LIM.MIN, LIM.MAX);
   let max = clamp(fromU(n("pfMax")), LIM.MIN, LIM.MAX);
   const step = clamp(S.unit === "F" ? n("pfStep") * 5 / 9 : n("pfStep"), 1, 30);
-  const every = clamp(Math.round(n("pfEvery")), 5, 50);
-  if ([base, max, step, every].some(v => !isFinite(v))) return null;
+  const mins = clamp(Math.round(n("pfMins")), 1, 15);
+  if ([base, max, step, mins].some(v => !isFinite(v))) return null;
   if (max < base) max = base;
-  return { base, max, step, every, terp };
+  return { base, max, step, mins, terp };
 }
 // Tells you, as you type, where the climb will end up
 function climbHint() {
   const f = editMode === "climb" && readForm();
   if (!f) { $("pfHint").textContent = editMode === "climb" ? "Fill in every number to see where this climb ends up." : ""; return; }
-  const steps = Math.ceil((f.max - f.base) / f.step - 1e-6), reach = steps * f.every;
+  const steps = Math.ceil((f.max - f.base) / f.step - 1e-6), reach = steps * f.mins;
+  // Once a few sessions are logged, say when the climb runs past your usual session
+  const usual = M.sessions >= 3 ? Math.round(M.sessMin) : 0;
   $("pfHint").textContent = steps <= 0 ? "Top temp is the start temp, so this won't climb."
-    : reach <= 100 ? `Reaches ${fmt(f.max)}° when the bowl is about ${reach}% used.`
-    : `Only gets to about ${fmt(Math.min(f.max, f.base + Math.floor(100 / f.every) * f.step))}° by the end of a bowl. Step more often or by more to reach ${fmt(f.max)}°.`;
+    : `Reaches ${fmt(f.max)}° after about ${reach} min at temperature.` + (usual && reach > usual ? ` Your sessions usually last about ${usual} min, so step more often or by more to get there.` : "");
 }
 function saveEdit() {
   const f = readForm();
@@ -147,7 +150,7 @@ function saveEdit() {
   if (existing) Object.assign(existing, data);
   else { const id = "p" + nowMs().toString(36); P.list.push({ id, ...data }); editing = id; } // new, or deleted in another tab meanwhile
   saveProfiles();
-  if (editing === P.active) { TP = f.terp || null; renderTerps(); if (S.connected) setTarget(f.base, 0); CL.mark = bowlPct(); }
+  if (editing === P.active) { TP = f.terp || null; renderTerps(); if (S.connected) setTarget(f.base, 0); CL.mark = CL.min; }
   renderProfList(); showProfList(); render();
 }
 function deleteEdit() {

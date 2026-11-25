@@ -15,8 +15,8 @@ function closeSheets() {
   if (openSh) hideSheet(openSh);
   if (histPushed) { histPushed = false; try { history.back(); } catch (e) {} }
 }
-window.addEventListener("popstate", () => { if (LB.asking) lbAskHide(); if (histPushed) { histPushed = false; if (openSh) hideSheet(openSh); if (LB.open) lbClose(true); } });
-document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (LB.asking) lbAskHide(); else if (openSh) closeSheets(); else if (LB.open) lbClose(); });
+window.addEventListener("popstate", () => { if (histPushed) { histPushed = false; if (openSh) hideSheet(openSh); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openSh) closeSheets(); });
 for (const name of Object.keys(SHEETS)) {
   const [w, s] = SHEETS[name], sheet = $(s), head = sheet.querySelector ? sheet.querySelector(".shead") : null;
   $(s).inert = true;
@@ -55,43 +55,4 @@ function drawSettings() {
   const h = batteryHealth();
   put($("healthVal"), "text", h && h.pct ? h.pct + "%" : "--");
   put($("healthSub"), "text", h && h.pct ? `Compared with your first week · ${M.cycles.toFixed(1)} charges logged` : `Learning: needs about 2 weeks of use · ${M.cycles.toFixed(1)} charges logged`);
-  put($("bestSub"), "text", M.bestArea && M.typArea ? `${times(M.bestArea / M.typArea)} your usual pull, on ${new Date(M.bestAt).toLocaleDateString()}` : "No pulls yet");
-  // Shortcut on the main screen while heating, until the test has been run once on this phone
-  put($("gtMain"), "hidden", !heatingNow() || GT.on || gtDone || LB.open || LB.labels.length > 0);
-  // The Start button never goes silent: while it can't run, it says why beside it and again when tapped
-  put($("gtBtn"), "@aria-disabled", String(!!gtBlock()));
-  put($("gtWhy"), "text", gtBlock() || "Calls out 6 pulls of different strengths and records them. About 4 minutes.");
-  put($("pdStatus"), "text", !on ? "Connect and turn the heater on to see this."
-    : !heatingNow() ? "Turn the heater on to see this."
-    : !PD.settled ? "Waiting for the temperature to hold steady. Pulls are counted once it does."
-    : `Holding at ${fmt(PD.base)}°. Firm pulls that dip it ${dU(pdThr()).toFixed(1)}° or more are counted. Soft pulls barely move it, so tap + Pull for those.`);
-  if (openSh === "settings") drawTrace();
 }
-// The last 90 s of chamber temperature, the steady level, and the pulls that were counted
-let traceAt = 0;
-function drawTrace() {
-  const cv = $("trace"), t = nowMs();
-  if (!cv.getContext || t - traceAt < 400) return;
-  traceAt = t;
-  const g = cv.getContext("2d"), W = cv.width, Hh = cv.height, tr = PD.trace;
-  g.clearRect(0, 0, W, Hh);
-  if (tr.length < 2) return;
-  let lo = Infinity, hi = -Infinity;
-  for (const [, v, b] of tr) { lo = Math.min(lo, v, b ?? v); hi = Math.max(hi, v, b ?? v); }
-  const mid = (lo + hi) / 2, span = Math.max(8, hi - lo + 2);
-  const X = ts => W * (1 - (t - ts) / 90000), Y = v => Hh * (0.5 - (v - mid) / span);
-  const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
-  g.fillStyle = col("--accent") + "40";
-  for (let i = 1; i < tr.length; i++) if (tr[i][3]) g.fillRect(X(tr[i - 1][0]), 0, X(tr[i][0]) - X(tr[i - 1][0]) + 1, Hh);
-  const line = (k, c, w) => { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); let on = false; for (const p of tr) { if (p[k] == null) { on = false; continue; } on ? g.lineTo(X(p[0]), Y(p[k])) : g.moveTo(X(p[0]), Y(p[k])); on = true; } g.stroke(); };
-  line(2, col("--muted"), 2);
-  line(1, col("--heat-2"), 3);
-}
-function renderSens() {
-  $("sens").replaceChildren(...Object.entries(SENS).map(([id, s]) => {
-    const b = document.createElement("button"); b.textContent = s.label; b.className = id === pdSens ? "on" : "";
-    b.addEventListener("click", () => { pdSens = id; store.set(KEY.pd, { sens: id, gtDone }); rec("det", "sensitivity", id); renderSens(); render(); });
-    return b;
-  }));
-}
-

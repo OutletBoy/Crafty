@@ -1,19 +1,22 @@
 // ---- Session history (kept on this phone) ----
 const cleanHist = h => Array.isArray(h) ? h.filter(x => x && isFinite(x.start) && isFinite(x.mins)).map(x => ({
-  start: x.start, mins: num(x.mins, 0, 0, 1e4), tMin: num(x.tMin, 0, 0, 260), tMax: num(x.tMax, 0, 0, 260), hits: num(x.hits, 0, 0, 1e4),
-  pulls: num(x.pulls, 0, 0, 1e4), best: num(x.best, 0, 0, 100), used: x.used == null ? null : num(x.used, null, 0, 100),
+  start: x.start, mins: num(x.mins, 0, 0, 1e4), tMin: num(x.tMin, 0, 0, 260), tMax: num(x.tMax, 0, 0, 260),
+  used: x.used == null ? null : num(x.used, null, 0, 100),
   profile: typeof x.profile === "string" ? x.profile.slice(0, 60) : "", note: typeof x.note === "string" ? x.note.slice(0, 40) : "" })).slice(0, 300) : [];
-let H = cleanHist(store.json(KEY.hist));
+const rawHist = store.json(KEY.hist);
+let H = cleanHist(rawHist);
 // If storage fills up, the oldest half of the history makes room
 const saveHist = () => store.set(KEY.hist, H, () => { if (H.length < 20) return false; H.length = Math.floor(H.length / 2); return true; });
-const newSess = t => ({ start: t, batt: S.battery, tMin: S.target ?? 0, tMax: S.target ?? 0, pulls: 0, best: 0, profile: activeProfile().name, terp: terpOf(TP)?.name || "" });
-function logSession(t, note, x = F.sess, hits = F.sessHits) {
+// Sessions saved by older pages carry pull counts; save the history once without them
+if (Array.isArray(rawHist) && rawHist.some(x => x && ("hits" in x || "pulls" in x || "best" in x)) && store.ok && !store.readOnly) saveHist();
+const newSess = t => ({ start: t, batt: S.battery, tMin: S.target ?? 0, tMax: S.target ?? 0, profile: activeProfile().name, terp: terpOf(TP)?.name || "" });
+function logSession(t, note, x = F.sess) {
   if (x === F.sess) F.sess = null;
   if (!x) return;
   const mins = (t - x.start) / 60000;
   if (mins < 1) return;
-  H.unshift({ start: x.start, mins: +mins.toFixed(1), tMin: +x.tMin.toFixed(1), tMax: +x.tMax.toFixed(1), hits,
-              pulls: +x.pulls.toFixed(1), best: +x.best.toFixed(1), used: x.batt != null && S.battery != null ? Math.max(0, x.batt - S.battery) : null,
+  H.unshift({ start: x.start, mins: +mins.toFixed(1), tMin: +x.tMin.toFixed(1), tMax: +x.tMax.toFixed(1),
+              used: x.batt != null && S.battery != null ? Math.max(0, x.batt - S.battery) : null,
               profile: x.profile + (x.terp ? " · " + x.terp : ""), note });
   H.sort((a, b) => b.start - a.start); // a session recovered from a reload can be older than one already logged
   if (H.length > 300) H.length = 300;
@@ -21,8 +24,8 @@ function logSession(t, note, x = F.sess, hits = F.sessHits) {
 }
 // A session saved before the page was closed or reloaded: resume it on reconnect if it's recent, otherwise log it now
 if (savedSess) {
-  if (nowMs() - savedSess.savedAt < CFG.resumeWindow) { F.sess = savedSess; F.sessHits = num(savedSess.hits, 0, 0, 1e4); F.sessStart = savedSess.start; S.lostAt = savedSess.savedAt; }
-  else logSession(savedSess.savedAt, "page closed", savedSess, num(savedSess.hits, 0, 0, 1e4));
+  if (nowMs() - savedSess.savedAt < CFG.resumeWindow) { F.sess = savedSess; F.sessStart = savedSess.start; S.lostAt = savedSess.savedAt; }
+  else logSession(savedSess.savedAt, "page closed", savedSess);
 }
 function renderHistory() {
   const life = [];
@@ -32,7 +35,6 @@ function renderHistory() {
   const totMin = H.reduce((a, x) => a + x.mins, 0);
   add("Sessions logged here", `${H.length} · ${totMin >= 60 ? (totMin / 60).toFixed(1) + " h" : Math.round(totMin) + " min"}`);
   if (S.lifeH != null) add("Sessions, all time (est.)", "~" + Math.round((S.lifeH * 60 + (S.lifeM || 0)) / Math.max(2, M.sessMin)));
-  add("Pulls counted here", String(M.pulls));
   $("life").replaceChildren(...life);
   const df = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   $("histList").replaceChildren(...(H.length ? H.slice(0, 100).map(x => {
@@ -40,7 +42,7 @@ function renderHistory() {
     const b = document.createElement("b"); b.textContent = `${df.format(new Date(x.start))} · ${Math.round(x.mins)} min`;
     const temps = Math.round(toU(x.tMin)) === Math.round(toU(x.tMax)) ? `${fmt(x.tMin)}°` : `${fmt(x.tMin)}° to ${fmt(x.tMax)}°`;
     const d = document.createElement("div");
-    d.textContent = [temps, `${x.hits} pulls`, x.used != null ? `${x.used}% battery` : "", x.profile, x.note].filter(Boolean).join(" · ");
+    d.textContent = [temps, x.used != null ? `${x.used}% battery` : "", x.profile, x.note].filter(Boolean).join(" · ");
     r.append(b, d); return r;
   }) : [Object.assign(document.createElement("div"), { className: "note", textContent: "Sessions show up here after you heat up for at least a minute." })]));
 }
@@ -66,7 +68,6 @@ function fcBattery(b) {
 }
 function renderForecast() {
   const on = S.connected, T = S.target == null ? null : effTarget();
-  put($("newBowl"), "disabled", !on);
   const conf = $("fcConf");
   if (!on || S.battery == null || T == null) {
     put($("fcMain"), "text", "--");
@@ -75,7 +76,7 @@ function renderForecast() {
   } else if (charging()) {
     put($("fcMain"), "text", S.battery + "%"); put($("fcSub"), "text", "Charging"); put(conf, "hidden", true);
   } else {
-    const perMin = M.corr * (holdRate(T) + (M.hits / M.sessMin) * hitCost(T));
+    const perMin = M.corr * holdRate(T);
     const mins = Math.max(0, Math.floor(S.battery / perMin));
     const bowls = S.battery / sessionCost(T);
     const key = mins + "|" + fmt(T);
@@ -87,10 +88,6 @@ function renderForecast() {
     // Starts from review figures; labelled until it has learned from about 20 real percent drops on this Crafty
     put(conf, "hidden", M.drops >= 20); put(conf, "text", "estimate");
   }
-  const pct = Math.round(bowlPct());
-  put($("bowlMain"), "text", B.p > 0 || PD.inHit ? `~${pct}% used` : "Fresh");
-  put($("bowlFill"), "transform", `scaleX(${pct / 100})`);
-  put($("bowlSub"), "text", B.hits + (B.hits === 1 ? " pull" : " pulls") + (learning() ? " · estimate" : ""));
 }
 function batteryHealth() {
   // Needs at least two weeks and 60 measured percent. Baseline = the first week's average; recent = the last week's.
@@ -101,11 +98,3 @@ function batteryHealth() {
   const avg = a => a.reduce((s, x) => s + x.c, 0) / a.length;
   return { pct: clamp(Math.round(100 * avg(first) / avg(last)), 40, 100) };
 }
-// Live draw gauge: an inner arc that fills with the current pull, full at twice your usual pull
-function renderDraw() {
-  const showing = S.connected && (PD.inHit || nowMs() - F.lastPullAt < 4000);
-  const val = PD.inHit ? liveStrength() : F.lastPull;
-  put($("drawArc"), "@opacity", showing ? "1" : "0");
-  put($("drawArc"), "strokeDashoffset", String(DRAWLEN * (1 - clamp(val / 2, 0, 1))));
-}
-
