@@ -40,6 +40,8 @@ const setUnit = u => { S.unit = u; store.set(KEY.unit, u); renderTerps(); render
 $("unitF").addEventListener("click", () => setUnit("F"));
 $("unitC").addEventListener("click", () => setUnit("C"));
 $("recBtn").addEventListener("click", () => setRec(!REC.on));
+$("keepBtn").addEventListener("click", () => keepSet(!K.on));
+$("keepLine").addEventListener("click", () => keepSet(!K.on));
 $("recShare").addEventListener("click", shareRec);
 $("recClear").addEventListener("click", clearRec);
 $("bmSpent").addEventListener("click", () => bmSpent(false));
@@ -66,6 +68,7 @@ window.addEventListener("storage", e => {
   else if (e.key === KEY.unit) { if (e.newValue === "C" || e.newValue === "F") S.unit = e.newValue; }
   else if (e.key === KEY.model && !S.connected) M = cleanModel(store.json(KEY.model));
   else if (e.key === KEY.meter && !S.connected) BL = cleanMeter(store.json(KEY.meter));
+  else if (e.key === KEY.keep) { const on = e.newValue === "1"; if (on !== K.on) { K.on = on; K.onAt = on ? nowMs() : 0; K.capped = false; K.broken = false; K.verify = null; } }
   else if (e.key === KEY.strains) { ST = cleanStrains(store.json(KEY.strains)); if (openSh === "str" && stView === "list") renderStrList(); }
   else return;
   render();

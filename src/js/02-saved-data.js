@@ -5,7 +5,7 @@
 // 2: pulls measured relative to your usual pull; climb profiles step by % of the bowl.
 // 3 (r13): pull counting and the bowl estimate removed. Climb profiles step every few minutes at temperature.
 const SCHEMA = 3;
-const KEY = { unit: "crafty-unit", model: "crafty-model-v2", bowl: "crafty-bowl" /* the live session and climb clock; the name is older than the change */, prof: "crafty-profiles", light: "crafty-light", hist: "crafty-history", schema: "crafty-schema", meter: "crafty-meter" /* bowl meter pace, r14 */, strains: "crafty-strains" /* strains, batches and their paces, r15 */ };
+const KEY = { unit: "crafty-unit", model: "crafty-model-v2", bowl: "crafty-bowl" /* the live session and climb clock; the name is older than the change */, prof: "crafty-profiles", light: "crafty-light", hist: "crafty-history", schema: "crafty-schema", meter: "crafty-meter" /* bowl meter pace, r14 */, strains: "crafty-strains" /* strains, batches and their paces, r15 */, keep: "crafty-keep" /* Keep heating switch, r19 */ };
 const store = {
   ok: true, readOnly: false, damaged: [], full: false,
   raw(k) { try { return localStorage.getItem(k); } catch (e) { store.ok = false; return null; } },

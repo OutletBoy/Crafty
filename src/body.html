@@ -64,6 +64,7 @@
     <button class="main connect" id="mainBtn"><i class="spin" id="mainSpin" hidden></i><span id="mainTxt">Connect to Crafty</span></button>
   </div>
   <p class="hint" id="hint">Press the Crafty's button once to wake it, then tap Connect.</p>
+  <button class="keep" id="keepLine" aria-pressed="false" hidden>Keep heating: Off</button>
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
@@ -80,6 +81,7 @@
         <div class="row"><div><b id="fwTitle">Not connected</b><small id="fwInfo">Connect to see details</small></div><button class="btn" id="discBtn" disabled>Disconnect</button></div>
         <div class="row"><div><b>Boost amount</b><small>Added on top when you start boost with the Crafty's button</small></div>
           <div class="stepper"><button id="bMinus" aria-label="Less boost" disabled>−</button><output class="num" id="boostVal">--</output><button id="bPlus" aria-label="More boost" disabled>+</button></div></div>
+        <div class="row"><div><b>Keep heating</b><small>Stops the Crafty shutting itself off mid-bowl while this page is open and connected. Ends after 30 minutes of heating.</small></div><button class="switch" id="keepBtn" role="switch" aria-checked="false" aria-label="Keep heating"></button></div>
         <div class="row stack"><div class="bar2" style="display:flex;justify-content:space-between"><b>LED brightness</b><span class="val num" id="ledVal">--</span></div>
           <input type="range" id="led" min="0" max="100" step="5" aria-label="LED brightness" disabled></div>
         <div class="row"><div><b>Find my Crafty</b><small>Buzzes and blinks for about 30 seconds</small></div><button class="btn" id="findBtn" disabled>Find</button></div>
@@ -108,6 +110,7 @@
       <div class="glabel" role="heading" aria-level="2">Help</div>
       <p class="note"><b>Trouble connecting?</b> Use Chrome on Android with Bluetooth on (and Location, on Android 11 or older). Press the Crafty's button once to wake it, and close the S&amp;B web app or any other phone connected to it.</p>
       <p class="note">Drag the ring or tap − and + to set the temperature. The page keeps to the Crafty's own 40–210 °C range. Boost and superboost can only be started with the button on the Crafty. Battery figures are estimates that learn from how you use it.</p>
+      <p class="note"><b>Keep heating.</b> The Crafty turns its heater off after a few minutes when it doesn't sense you using it, and it misses gentle draws. With Keep heating on, the page restarts that countdown before it runs out, the same as turning the temperature down and back up, and your temperature stays where you set it. It only works while this page is open on screen and connected, and stops after 30 minutes of heating. Close the page, switch screens or disconnect, and the Crafty's own shut-off is back.</p>
       <p class="note"><b>Strains.</b> Tap the strain line on the Bowl tile to pick what's in the bowl. Each strain keeps its own batches, each with a THC %, a date and a photo, and learns its own pace from your taps, starting from your overall pace. Adding a strain by name fills in its effects, terpenes and flavors from the page's built-in strain list, which you can edit. Strains and photos stay on this phone, and nothing is sent anywhere.</p>
       <p class="note"><b>Strain list credits.</b> The built-in strain list is made from the <a href="https://github.com/Shannon-Goddard/ci-strains-pro" target="_blank" rel="noopener noreferrer">Cannabis Intelligence Database</a> by Shannon Goddard (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>) and the <a href="https://github.com/kushyapp/cannabis-dataset" target="_blank" rel="noopener noreferrer">Kushy Cannabis Dataset</a> (MIT, © Kushy), cut down to a fixed set of words and merged across listings. Side effects are left out. It can be wrong.</p>
       <p class="note"><b>Bowl meter.</b> Each segment is a temperature level, 360° to 410°. Time at temperature fills the level you're at and every level below it, faster when it's hotter, so a bowl that's spent at 365° still gives vapor at 390°. The Crafty doesn't report your draws, so this is an estimate: tap <b>No more vapor</b> when a level runs out (or <b>Still vapor</b> when it hasn't) and the meter corrects this bowl and learns your pace.</p>

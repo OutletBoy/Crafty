@@ -36,7 +36,7 @@ function takeControl() {
     }).catch(() => res(true));
   });
 }
-const NOTIFY = ["current", "battery", "project", "status2", "power"];
+const NOTIFY = ["current", "battery", "project", "status2", "power", "autoOff"];
 // connect({auto}) is used for the Connect button and, with auto, for getting the Crafty back after a dropout.
 // Returns true when connected. Auto attempts stay quiet; the reconnect loop reports the outcome.
 async function connect(opts = {}) {
@@ -97,7 +97,7 @@ async function connect(opts = {}) {
 function giveBackControl() { if (releaseControl) releaseControl(); }
 // Readings outside what a Crafty can report (a glitch, a half-received value) are ignored rather than shown,
 // so one bad packet can't fake a battery drop or a target change.
-const SANE = { current: [0, 260], target: [LIM.MIN - 1, LIM.MAX + 1], boost: [0, LIM.BOOST_MAX], battery: [0, 100], led: [0, 100] };
+const SANE = { current: [0, 260], target: [LIM.MIN - 1, LIM.MAX + 1], boost: [0, LIM.BOOST_MAX], battery: [0, 100], led: [0, 100], autoOff: [0, 21600], autoOffSet: [10, 21600] };
 const sane = (k, v) => !SANE[k] || (isFinite(v) && v >= SANE[k][0] && v <= SANE[k][1]);
 function apply(k, dv, src = "read") {
   if (!dv || !dv.byteLength) return;
@@ -113,11 +113,13 @@ function apply(k, dv, src = "read") {
   else if (k === "power") S.power = v = u16(dv);
   else if (k === "useHours") S.lifeH = v = u16(dv);
   else if (k === "useMins") S.lifeM = v = u16(dv);
+  else if (k === "autoOff") { v = u16(dv); if (sane(k, v)) keepHeard(v); }
+  else if (k === "autoOffSet") { v = u16(dv); if (sane(k, v)) K.setting = v; }
   rec(src, k, hex(dv), v == null ? "" : +(+v).toFixed(2));
 }
 async function refresh(all) {
   // Target first, so the °F/°C setting is known before the current temperature is read
-  const keys = all ? ["target", "current", "boost", "battery", "led", "project", "status2", "power", "useHours", "useMins"] : ["project", "status2", "battery", "power"];
+  const keys = all ? ["target", "current", "boost", "battery", "led", "project", "status2", "power", "useHours", "useMins", "autoOffSet", "autoOff"] : ["project", "status2", "battery", "power"];
   const t = nowMs();
   for (const k of keys) {
     if (!all && t - (S.seen[k] || 0) < 4500) continue; // pushed to us recently, no need to ask

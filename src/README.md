@@ -23,6 +23,7 @@ Only Node is needed. There are no packages to install.
   - `09-connection.js`: connect, disconnect, reconnect and reading the device's values.
   - `10-estimates.js`: the battery estimate and what it learns, and the saved session and climb clock.
   - `12-session-and-climb.js`: sessions (heater on to off), the climb clock (minutes at temperature, carried over a quick reheat), and the once-a-few-seconds read loop.
+  - `12a-keep-heating.js`: Keep heating (r19). Restarts the Crafty's auto-off countdown while the page is open, connected and heating, with a 30-minute cap. It only re-sends the target temperature (same value, or one degree down and back); it never writes the auto-off time itself.
   - `13-history.js`: session history kept on the phone.
   - `14-terpenes.js`, `15-profiles.js`, `16-lighting.js`: those features and their sheets.
   - `17-ring-controls.js`: drag the ring, and hold − or + to repeat.

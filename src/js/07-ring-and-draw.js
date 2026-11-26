@@ -103,6 +103,7 @@ function draw() {
   for (const b of ps.children) { put(b, "disabled", !on); put(b, "class", "qbtn num" + (S.target != null && Math.abs(+b.dataset.c - S.target) < 0.6 ? " on" : "")); }
 
   drawSettings();
+  drawKeep();
   renderForecast();
   renderBowl();
   renderClimb();

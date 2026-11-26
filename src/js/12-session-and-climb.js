@@ -23,6 +23,7 @@ async function fcLoop() {
   if (!S.dragging && stale > 4000) { try { apply("current", await read("current"), "read"); } catch (e) {} }
   if (REC.on) recPollDiag();
   fcTick();
+  keepTick();
   render();
 }
 const charging = () => !!(S.power & 1);

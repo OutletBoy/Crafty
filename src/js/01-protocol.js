@@ -10,6 +10,8 @@ const CH = {
   led:       ["s1", U("51")], // 0-100
   heaterOn:  ["s1", U("81")], // write 0x0000
   heaterOff: ["s1", U("91")], // write 0x0000
+  autoOffSet: ["s1", U("61")], // auto-off time, seconds (240 on ours). Only ever read here: writing it needs an unlock write
+  autoOff:   ["s1", U("71")], // seconds left before the Crafty shuts itself off; restarts when it senses use. Notify
   firmware:  ["s2", U("32")], // text, e.g. "V03.10"
   serial:    ["s2", U("52")], // text, first 8 chars
   project:   ["s3", U("93")], // bit4 heater, bit5 boost, bit6 superboost, bit8 at temperature
